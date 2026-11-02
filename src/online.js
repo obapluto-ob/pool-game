@@ -178,7 +178,15 @@ const FeltoraOnline = (() => {
   async function startMic() {
     if (localStream) return localStream;
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+        }
+      });
       return localStream;
     } catch (e) {
       console.warn('[online] mic access denied', e);

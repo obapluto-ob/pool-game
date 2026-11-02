@@ -374,6 +374,9 @@
       </header>
 
       <div class="table-stage">
+        <div class="table-shell">
+          <canvas id="c" width="900" height="500" aria-label="Pool table"></canvas>
+        </div>
         <div class="power-box" id="power-box" role="slider" tabindex="0"
              aria-label="Shot power. Pull up to increase, release to shoot."
              aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
@@ -382,9 +385,6 @@
           <span class="power-hint" id="power-hint">Pull↑</span>
           <span class="power-readout" id="power-readout">50%</span>
           <input type="range" id="pw" min="0" max="100" value="50" tabindex="-1" aria-hidden="true">
-        </div>
-        <div class="table-shell">
-          <canvas id="c" width="900" height="500" aria-label="Pool table"></canvas>
         </div>
       </div>
 

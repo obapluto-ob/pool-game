@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080e0c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FELTORA">
+  <meta name="description" content="Compete. Hustle. Win. Online 8-ball pool with voice chat.">
+  <title>FELTORA | 8-ball pool</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%23101511'/><circle cx='16' cy='16' r='10' fill='%23161616'/><circle cx='16' cy='16' r='4' fill='white'/><text x='16' y='20' text-anchor='middle' font-size='9' font-weight='bold' fill='white' font-family='sans-serif'>8</text></svg>">
+</head>
+<body data-theme="dark">
+  <div class="app">
+
+    <!-- ── AUTH SCREEN ─────────────────────────────────────────── -->
+    <section class="screen auth-screen active" id="auth-screen">
+      <div class="auth-bg" aria-hidden="true">
+        <span class="auth-ball" style="--bx:12%;--by:20%;--bd:8s;--bs:1.4">●</span>
+        <span class="auth-ball" style="--bx:78%;--by:60%;--bd:11s;--bs:0.9">●</span>
+        <span class="auth-ball" style="--bx:45%;--by:80%;--bd:7s;--bs:1.1">●</span>
+        <span class="auth-ball" style="--bx:88%;--by:15%;--bd:14s;--bs:0.7">●</span>
+        <span class="auth-ball" style="--bx:30%;--by:50%;--bd:9s;--bs:1.3">●</span>
+        <span class="auth-ball" style="--bx:60%;--by:35%;--bd:12s;--bs:0.8">●</span>
+      </div>
+      <div class="auth-shell">
+        <div class="auth-brand">
+          <div class="auth-logo-wrap">
+            <img src="assets/logo.svg" alt="FELTORA logo" class="auth-logo-img" id="auth-logo" draggable="false">
+          </div>
+          <h1 class="auth-title">FELTORA</h1>
+          <p class="auth-sub">Compete. Hustle. Win.</p>
+        </div>
+
+        <div class="auth-card panel">
+          <div class="auth-tabs" role="tablist">
+            <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true" aria-controls="panel-login" type="button">Sign in</button>
+            <button class="auth-tab" id="tab-register" role="tab" aria-selected="false" aria-controls="panel-register" type="button">Create account</button>
+          </div>
+
+          <!-- Login -->
+          <div class="auth-panel" id="panel-login" role="tabpanel">
+            <div class="auth-field">
+              <label class="mini-label" for="login-username">Username</label>
+              <input id="login-username" type="text" autocomplete="username" placeholder="your_username" maxlength="18">
+            </div>
+            <div class="auth-field">
+              <label class="mini-label" for="login-pin">4-digit PIN</label>
+              <input id="login-pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="current-password">
+            </div>
+            <p class="auth-error" id="login-error" hidden></p>
+            <button class="mode-btn primary auth-submit" id="btn-login" type="button">
+              <span>Sign in</span><span class="meta">→</span>
+            </button>
+            <button class="auth-guest-btn" id="btn-guest" type="button">Continue as guest</button>
+          </div>
+
+          <!-- Register -->
+          <div class="auth-panel" id="panel-register" role="tabpanel" hidden>
+            <div class="auth-field">
+              <label class="mini-label" for="reg-username">Username</label>
+              <input id="reg-username" type="text" autocomplete="username" placeholder="choose_a_name" maxlength="18">
+              <small>3–18 chars, letters/numbers/underscore only</small>
+            </div>
+            <div class="auth-field">
+              <label class="mini-label" for="reg-pin">4-digit PIN</label>
+              <input id="reg-pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="new-password">
+              <small>Used to sign back in on this device</small>
+            </div>
+            <div class="auth-field">
+              <label class="mini-label" for="reg-pin2">Confirm PIN</label>
+              <input id="reg-pin2" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="new-password">
+            </div>
+            <p class="auth-error" id="reg-error" hidden></p>
+            <button class="mode-btn primary auth-submit" id="btn-register" type="button">
+              <span>Create account</span><span class="meta">→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LOBBY SCREEN ────────────────────────────────────────── -->
+    <section class="screen lobby" id="lobby-screen">
+      <div class="lobby-shell">
+        <aside class="profile-panel panel">
+          <div class="title-row">
+            <img src="assets/logo.svg" alt="FELTORA" class="lobby-logo" id="lobby-logo" draggable="false">
+            <div class="brand">FELTORA</div>
+            <button class="theme-toggle music-lobby-btn" id="lobby-music-toggle" type="button" data-music-toggle aria-pressed="false">♪ Off</button>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">Light</button>
+          </div>
+
+          <div class="avatar-card">
+            <div class="avatar" aria-hidden="true"><span class="avatar-mark" data-avatar-display="profile"></span></div>
+            <div class="name-wrap">
+              <strong id="profile-name">Player One</strong>
+              <span id="profile-account-tag">Guest</span>
+              <span id="profile-mascot-title">Marlow · The Host</span>
+            </div>
+          </div>
+
+          <div class="stack">
+            <label class="profile-name-field" for="display-name">
+              <span class="mini-label">Display name</span>
+              <input id="display-name" type="text" maxlength="18" autocomplete="nickname" value="Player One">
+            </label>
+            <div>
+              <div class="mini-label">Cue finish</div>
+              <div class="chip-grid" aria-label="Cue finish selector">
+                <button class="chip-btn active" type="button" data-cue="wood">Wood</button>
+                <button class="chip-btn" type="button" data-cue="black">Black</button>
+                <button class="chip-btn" type="button" data-cue="gold">Gold</button>
+                <button class="chip-btn" type="button" data-cue="neon">Neon</button>
+                <button class="chip-btn" type="button" data-cue="chrome">Chrome</button>
+                <button class="chip-btn" type="button" data-cue="crimson">Crimson</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="mini-label">Avatar</div>
+              <div class="chip-grid avatar-grid" aria-label="Choose a FELTORA mascot">
+                <button class="chip-btn avatar-choice active" type="button" data-avatar="marlow" aria-pressed="true"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Marlow</span><span class="avatar-choice-role">Host</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="ivy" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Ivy</span><span class="avatar-choice-role">Tactician</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="rook" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Rook</span><span class="avatar-choice-role">Veteran</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="pip" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Pip</span><span class="avatar-choice-role">Trick shot</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="zara" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Zara</span><span class="avatar-choice-role">Hustler</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="knox" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Knox</span><span class="avatar-choice-role">Enforcer</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="lena" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Lena</span><span class="avatar-choice-role">Sharpshooter</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="dex" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Dex</span><span class="avatar-choice-role">Wildcard</span></button>
+              </div>
+            </div>
+          </div>
+
+            <div>
+              <div class="mini-label">Table felt</div>
+              <div class="chip-grid" aria-label="Table felt colour">
+                <button class="chip-btn active" type="button" data-felt="green">Green</button>
+                <button class="chip-btn" type="button" data-felt="blue">Blue</button>
+                <button class="chip-btn" type="button" data-felt="burgundy">Burgundy</button>
+                <button class="chip-btn" type="button" data-felt="slate">Slate</button>
+                <button class="chip-btn" type="button" data-felt="sand">Sand</button>
+              </div>
+            </div>
+          <div class="profile-stats" id="profile-stats" hidden>
+            <div class="mini-label">Your stats</div>
+            <div class="stats-row">
+              <div class="stat-chip"><strong id="stat-wins">0</strong><span>Wins</span></div>
+              <div class="stat-chip"><strong id="stat-losses">0</strong><span>Losses</span></div>
+              <div class="stat-chip"><strong id="stat-frames">0</strong><span>Frames</span></div>
+            </div>
+          </div>
+
+          <button class="auth-signout-btn" id="btn-signout" type="button" hidden>Sign out</button>
+
+          <details class="audio-settings">
+            <summary>Sound &amp; atmosphere</summary>
+            <label class="audio-setting" for="music-volume">
+              <span>Lounging music <output id="music-volume-value">18%</output></span>
+              <input type="range" id="music-volume" min="0" max="100" value="18">
+            </label>
+            <label class="audio-setting" for="effects-volume">
+              <span>Game sounds <output id="effects-volume-value">55%</output></span>
+              <input type="range" id="effects-volume" min="0" max="100" value="55">
+            </label>
+            <label class="mute-setting" for="master-mute">
+              <input type="checkbox" id="master-mute">
+              <span>Mute all sound</span>
+            </label>
+            <p class="audio-note">Audio begins after your first interaction.</p>
+          </details>
+        </aside>
+
+        <main class="lobby-main panel">
+          <div class="hero">
+            <div>
+              <div class="hero-eyebrow">FELTORA · The Clubhouse</div>
+              <h1>8-Ball Pool</h1>
+              <p class="hero-sub">Compete. Hustle. Win.</p>
+            </div>
+            <div class="hero-right">
+              <div class="coin-badge" id="coin-badge" title="Your coins">
+                <span class="coin-icon">🪙</span>
+                <span id="coin-count">0</span>
+              </div>
+              <span class="status-pill" id="mode-label">Online</span>
+            </div>
+          </div>
+
+          <section class="room-card" aria-labelledby="room-title">
+            <div class="room-heading">
+              <div>
+                <span class="mini-label">Current room</span>
+                <h2 id="room-title">Oak Room</h2>
+              </div>
+              <span class="room-state" id="room-state-label"><span class="presence-dot" id="presence-dot"></span><span id="room-state-text">SAME DEVICE</span></span>
+            </div>
+            <div class="room-seats">
+              <div class="room-seat">
+                <span class="seat-avatar" data-avatar-display="room-host" aria-hidden="true"></span>
+                <span class="seat-copy"><strong id="room-player-name">Player One</strong><small>Host · Ready</small></span>
+                <span class="seat-badge">YOU</span>
+              </div>
+              <div class="room-seat" id="seat-1">
+                <span class="seat-avatar guest" id="seat-1-avatar">P2</span>
+                <span class="seat-copy"><strong id="seat-1-name">Player 2</strong><small id="seat-1-note">Second local player</small></span>
+                <span class="seat-badge open" id="seat-1-badge">READY</span>
+              </div>
+            </div>
+            <p class="room-note">Create or join a spot to play online.</p>
+          </section>
+
+          <div class="mode-list">
+            <button class="mode-btn primary" id="play-online" type="button" aria-expanded="false" aria-controls="online-config">
+              <span>Play Online</span>
+              <span class="meta">🌐</span>
+            </button>
+            <button class="mode-btn primary" id="play-bot" type="button" aria-expanded="false" aria-controls="bot-config">
+              <span>Play vs Bot</span>
+              <span class="meta">AI</span>
+            </button>
+          </div>
+
+          <!-- Online config panel -->
+          <section id="online-config" class="bot-config" hidden aria-labelledby="online-config-title">
+            <h2 class="mini-label" id="online-config-title">Online match</h2>
+            <div class="online-tabs" id="online-tabs">
+              <button class="online-tab active" id="tab-host" type="button">Create spot</button>
+              <button class="online-tab" id="tab-join" type="button">Join spot</button>
+            </div>
+
+            <!-- Host panel -->
+            <div id="online-host-panel">
+              <p class="online-hint">Create a spot — your name appears in the lobby for others to join.</p>
+              <button class="mode-btn primary" id="btn-create-room" type="button">
+                <span>Create Spot</span><span class="meta">+</span>
+              </button>
+              <div id="room-code-display" hidden>
+                <div class="spot-created-card">
+                  <div class="spot-created-avatar" id="spot-host-avatar"></div>
+                  <div class="spot-created-info">
+                    <div class="spot-created-name" id="spot-host-name">You</div>
+                    <div class="spot-created-label">Spot open · waiting for opponent</div>
+                    <div class="spot-code-row">
+                      <span class="mini-label">Code:</span>
+                      <span class="room-code-inline" id="room-code-value">------</span>
+                      <button class="btn-copy-inline" id="btn-copy-code" type="button" title="Copy code">⎘</button>
+                    </div>
+                  </div>
+                </div>
+                <p class="online-hint" id="host-status">Waiting for opponent to join…</p>
+                <button class="mode-btn cancel-spot-btn" id="btn-cancel-spot" type="button">
+                  <span>Cancel Spot</span><span class="meta">✕</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Join panel -->
+            <div id="online-join-panel" hidden>
+              <!-- Live spots list -->
+              <div id="live-spots-list">
+                <p class="online-hint">Enter a room code your friend shared, or ask them for it.</p>
+              </div>
+              <div class="auth-field">
+                <label class="mini-label" for="join-code-input">Room code</label>
+                <input id="join-code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" style="text-transform:uppercase;letter-spacing:0.15em">
+              </div>
+              <p class="auth-error" id="join-error" hidden></p>
+              <button class="mode-btn primary" id="btn-join-room" type="button">
+                <span>Join Spot</span><span class="meta">→</span>
+              </button>
+              <p class="online-hint" id="join-status" hidden></p>
+            </div>
+          </section>
+
+          <section id="bot-config" class="bot-config" hidden aria-labelledby="bot-config-title">
+            <h2 class="mini-label" id="bot-config-title">Choose your opponent</h2>
+            <div class="bot-grid">
+              <button class="bot-card active" type="button" data-bot="marlow" aria-pressed="true">
+                <span class="bot-avatar-art"></span>
+                <span class="bot-name">Marlow</span>
+                <span class="bot-title">The Host</span>
+              </button>
+              <button class="bot-card" type="button" data-bot="ivy" aria-pressed="false">
+                <span class="bot-avatar-art"></span>
+                <span class="bot-name">Ivy</span>
+                <span class="bot-title">The Tactician</span>
+              </button>
+              <button class="bot-card" type="button" data-bot="rook" aria-pressed="false">
+                <span class="bot-avatar-art"></span>
+                <span class="bot-name">Rook</span>
+                <span class="bot-title">The Veteran</span>
+              </button>
+              <button class="bot-card" type="button" data-bot="pip" aria-pressed="false">
+                <span class="bot-avatar-art"></span>
+                <span class="bot-name">Pip</span>
+                <span class="bot-title">The Trick Shot</span>
+              </button>
+            </div>
+            <label class="bot-difficulty" for="bot-difficulty">
+              <span>Difficulty</span>
+              <select id="bot-difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+            <button class="mode-btn primary" id="start-bot-match" type="button">
+              <span>Start Bot Match</span><span class="meta">▶</span>
+            </button>
+          </section>
+
+          <div class="settings-grid">
+            <div class="info-tile"><span class="tile-icon">♧</span><span><strong>Classic 8-ball</strong><small>Official rules &amp; physics</small></span></div>
+            <div class="info-tile"><span class="tile-icon">⌖</span><span><strong>Power control</strong><small>Pull up the bar, release to shoot</small></span></div>
+            <div class="info-tile"><span class="tile-icon">⚑</span><span><strong>2-shot rule</strong><small>Foul = opponent gets 2 shots</small></span></div>
+            <div class="info-tile"><span class="tile-icon">8</span><span><strong>Scratch on 8</strong><small>Pocket white with 8 = instant loss</small></span></div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ── GAME SCREEN ─────────────────────────────────────────── -->
+    <section class="screen game-screen" id="game-screen">
+      <header class="match-header">
+        <div class="player-card active" id="player-card-0">
+          <div class="player-meta">
+            <div class="player-avatar-wrap">
+              <div class="player-avatar" data-avatar-display="player-0" aria-hidden="true"></div>
+              <span class="group-ball" id="group-indicator-0" data-group="open" role="img" aria-label="Group not assigned"></span>
+            </div>
+            <div>
+              <div class="player-title-row">
+                <div class="player-title">Player 1</div>
+              </div>
+              <div class="player-tag">Ready</div>
+            </div>
+          </div>
+          <span class="group-pill" id="group-pill-0" aria-label="Group not assigned">
+            <span class="group-label" id="group-0">Open</span>
+            <span class="group-remaining" id="group-remaining-0" hidden></span>
+          </span>
+        </div>
+
+        <div class="player-card" id="player-card-1">
+          <div class="player-meta">
+            <div class="player-avatar-wrap">
+              <div class="player-avatar" data-avatar-display="player-1" aria-hidden="true"></div>
+              <span class="group-ball" id="group-indicator-1" data-group="open" role="img" aria-label="Group not assigned"></span>
+            </div>
+            <div>
+              <div class="player-title-row">
+                <div class="player-title">Player 2</div>
+              </div>
+              <div class="player-tag">Ready</div>
+            </div>
+          </div>
+          <span class="group-pill" id="group-pill-1" aria-label="Group not assigned">
+            <span class="group-label" id="group-1">Open</span>
+            <span class="group-remaining" id="group-remaining-1" hidden></span>
+          </span>
+        </div>
+      </header>
+
+      <div class="table-stage">
+        <div class="power-box" id="power-box" role="slider" tabindex="0"
+             aria-label="Shot power. Pull up to increase, release to shoot."
+             aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+          <label>PWR</label>
+          <div class="power-bar-track"><div class="power-bar-fill" id="power-bar-fill"></div></div>
+          <span class="power-hint" id="power-hint">Pull↑</span>
+          <span class="power-readout" id="power-readout">50%</span>
+          <input type="range" id="pw" min="0" max="100" value="50" tabindex="-1" aria-hidden="true">
+        </div>
+        <div class="table-shell">
+          <canvas id="c" width="900" height="500" aria-label="Pool table"></canvas>
+        </div>
+      </div>
+
+      <div class="footer-row">
+        <div class="action-row">
+          <div class="aim-controls" role="group" aria-label="Fine aim controls">
+            <button class="aim-btn" id="aim-left" type="button" aria-label="Aim left">◂</button>
+            <span class="aim-label">AIM</span>
+            <button class="aim-btn" id="aim-right" type="button" aria-label="Aim right">▸</button>
+          </div>
+          <button class="ghost-btn sound-btn" id="music-toggle" type="button" data-music-toggle aria-pressed="false">♪ Off</button>
+          <button class="ghost-btn voice-btn" id="voice-toggle-btn" type="button" hidden data-active="false" data-muted="true" aria-pressed="false">🎙 Mic</button>
+          <button class="ghost-btn view-3d-btn" id="toggle-3d" type="button" aria-pressed="false" title="Toggle 3D view">3D</button>
+          <button class="ghost-btn" id="back-to-lobby" type="button">Leave</button>
+        </div>
+      </div>
+
+      <p class="status-line" id="status" aria-live="polite">Player 1's turn</p>
+    </section>
+
+    <!-- ── RESULTS SCREEN ─────────────────────────────────────── -->
+    <section class="screen" id="results-screen">
+      <div class="results-panel panel">
+        <div class="results-badge" id="results-badge">Match complete</div>
+        <div class="results-players" aria-label="Match players">
+          <div class="result-player" id="result-player-0">
+            <span class="result-avatar" data-avatar-display="result-0" aria-hidden="true"></span>
+            <strong id="result-player-name-0">Player One</strong>
+            <small>Player 1</small>
+          </div>
+          <div class="result-player" id="result-player-1">
+            <span class="result-avatar" data-avatar-display="result-1" aria-hidden="true"></span>
+            <strong id="result-player-name-1">Player 2</strong>
+            <small>Player 2</small>
+          </div>
+        </div>
+        <h2 id="winner-name">Player 1</h2>
+        <p class="results-outcome" id="results-outcome">Player 1 takes the frame.</p>
+        <p id="winner-summary">Matches are won by pocketing the 8-ball on the final shot.</p>
+
+        <div class="results-stats">
+          <div class="stat-box">
+            <strong id="result-group-0">Open</strong>
+            <span>Player 1 group</span>
+          </div>
+          <div class="stat-box">
+            <strong id="result-group-1">Open</strong>
+            <span>Player 2 group</span>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button class="action-btn primary" id="rematch" type="button">Rematch</button>
+          <button class="action-btn" id="results-lobby" type="button">Lobby</button>
+        </div>
+        <div class="coin-earned-toast" id="coin-earned-toast" hidden>
+          <span>🪙</span>
+          <span id="coin-earned-text">+50 coins earned</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LANDSCAPE HINT ──────────────────────────────────── -->
+    <div class="landscape-hint" id="landscape-hint" aria-hidden="true">
+      <div class="landscape-hint-inner">
+        <div class="landscape-hint-icon">⟳</div>
+        <p>Rotate for the best experience</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="src/auth.js" defer></script>
+  <script src="src/mascots.js" defer></script>
+  <script src="src/online.js" defer></script>
+  <script src="src/game.js" defer></script>
+  <script>
+    // Interactive logo — click spins the 8-ball and strikes the cue
+    function triggerLogoSpin(el) {
+      if (!el) return;
+      el.classList.remove('logo-spin');
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add('logo-spin');
+      el.addEventListener('animationend', () => el.classList.remove('logo-spin'), { once: true });
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      ['auth-logo', 'lobby-logo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', () => {
+          // SVG is an <img> — we need to manipulate the SVG object directly
+          // Instead we apply a CSS class to the img wrapper and use CSS animation
+          el.classList.remove('logo-spin');
+          void el.offsetWidth;
+          el.classList.add('logo-spin');
+          el.addEventListener('animationend', () => el.classList.remove('logo-spin'), { once: true });
+        });
+        // subtle idle bob already in SVG, add pointer cursor
+        el.style.cursor = 'pointer';
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1675,8 +1675,8 @@ document.getElementById('btn-join-room').addEventListener('click', () => {
         statusEl.hidden = true;
         const isTimeout = errMsg.includes('timeout');
         errEl.textContent = isTimeout
-          ? 'Connection timed out. The host may have left. Try again.'
-          : 'Could not reach that spot. The host may not be ready yet — wait a moment and try again.';
+          ? 'Could not connect — taking too long. Both players should be on the page at the same time. Try again.'
+          : 'Could not reach that spot. Check the code is correct and the host is still waiting.';
         errEl.hidden = false;
         return;
       }

@@ -30,16 +30,35 @@ const FeltoraOnline = (() => {
   }
 
   // ── PeerJS config ────────────────────────────────────────────────
+  // Uses PeerJS cloud (reliable) + STUN + free TURN relays for strict NAT
   const PEER_CONFIG = {
     host: '0.peerjs.com', port: 443, path: '/', secure: true,
     config: {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-      ]
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        // free TURN relays — handles strict NAT (mobile networks, corporate WiFi)
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      iceCandidatePoolSize: 10
     },
     debug: 0,
+    pingInterval: 3000,
   };
 
   // ── Spots registry (Firebase Realtime Database REST API) ────────
@@ -291,9 +310,10 @@ const FeltoraOnline = (() => {
     peer.on('open', () => {
       const targetId = 'feltora-' + roomCode;
       const c = peer.connect(targetId, { reliable: true, serialization: 'json' });
+      // 20s timeout — enough for TURN relay negotiation across strict NAT
       const timeout = setTimeout(() => {
         if (!c || c.open === false) onConnected('error:timeout');
-      }, 8000);
+      }, 20000);
       c.on('open', () => clearTimeout(timeout));
       wireConn(c);
       onConnected();

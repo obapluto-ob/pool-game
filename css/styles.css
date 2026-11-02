@@ -1309,6 +1309,12 @@ button:disabled {
   .aim-controls { justify-content: center; }
 }
 
+/* undo the above for portrait phones — portrait overhaul handles it */
+@media (max-width: 820px) and (orientation: portrait) and (max-width: 680px) {
+  .table-stage { display: block; }
+  .footer-row  { flex-direction: row; }
+}
+
 @media (max-width: 540px) {
   body { padding-left: 10px; padding-right: 10px; }
   .screen.game-screen.active { gap: 10px; }
@@ -1319,6 +1325,7 @@ button:disabled {
   .power-box label { font-size: 0.46rem; }
   .power-readout { min-width: 32px; padding: 4px 3px; font-size: 0.66rem; }
   .power-hint { font-size: 0.46rem; }
+  /* portrait phones override these below */
   .status-line { font-size: 0.8rem; }
   .lobby-main, .profile-panel { padding-left: 14px; padding-right: 14px; }
   .results-stats { grid-template-columns: 1fr; }
@@ -2145,13 +2152,11 @@ h1 {
 }
 .lobby-logo.logo-spin {
   animation: img-spin 0.6s cubic-bezier(0.34,1.56,0.64,1);
-}
 
 /* ════════════════════════════════════════════════════════════════
    MOBILE GAME LAYOUT
-   Portrait: table full width, HORIZONTAL power bar below table,
-             player cards compact strip at top, controls at bottom.
-   Landscape: table fills height, vertical power bar on right.
+   Portrait: table full width, horizontal power bar below table.
+   Landscape: vertical power bar on right.
    ════════════════════════════════════════════════════════════════ */
 
 /* ── Portrait phones ─────────────────────────────────────────── */
@@ -2159,28 +2164,20 @@ h1 {
   body:has(#game-screen.active) { padding: 0; }
 
   .screen.game-screen.active {
+    display: flex;
+    flex-direction: column;
     gap: 0;
     width: 100%;
     min-height: 100dvh;
-    display: grid;
-    grid-template-rows: auto auto auto 1fr auto;
-    grid-template-areas:
-      "header"
-      "table"
-      "power"
-      "footer"
-      "status";
-    background: var(--bg);
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
   }
 
-  /* compact player cards */
   .match-header {
-    grid-area: header;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
     padding: 6px 8px 4px;
+    flex-shrink: 0;
   }
   .player-card        { padding: 7px 10px; gap: 6px; border-radius: 12px; }
   .player-card.active { transform: none; }
@@ -2192,22 +2189,21 @@ h1 {
 
   /* table fills full width — no side bar */
   .table-stage {
-    grid-area: table;
-    display: block;          /* single column — no power bar here */
-    padding: 4px 8px 0;
+    display: block;
     width: 100%;
+    padding: 4px 8px 0;
     margin: 0;
+    flex-shrink: 0;
   }
   .table-shell {
     width: 100%;
     border-radius: 10px;
-    max-height: none;        /* let aspect ratio drive height */
+    max-height: none;
   }
 
-  /* HORIZONTAL power bar — full width strip below table */
+  /* horizontal power bar below table */
   .power-box {
-    grid-area: power;
-    display: flex;
+    display: flex !important;
     flex-direction: row;
     align-items: center;
     gap: 8px;
@@ -2220,38 +2216,23 @@ h1 {
     border-right: none;
     border-top: none;
     border-bottom: 1px solid var(--line);
-    background: var(--panel);
-    cursor: ew-resize;       /* horizontal drag hint */
+    cursor: ew-resize;
+    flex-shrink: 0;
   }
-  .power-box label    { writing-mode: horizontal-tb; font-size: 0.54rem; white-space: nowrap; }
-  .power-bar-track {
-    flex: 1;
-    width: auto;
-    height: 10px;
-    min-height: 0;
-    border-radius: var(--radius-pill);
-  }
-  .power-bar-fill {
-    /* horizontal fill — left to right, JS sets width% */
-    position: absolute;
-    top: 0; bottom: 0; left: 0;
-    right: auto;
-    width: 50%;
-    height: 100%;
-    border-radius: var(--radius-pill);
-  }
-  .power-hint   { font-size: 0.5rem; white-space: nowrap; }
-  .power-readout { min-width: 36px; font-size: 0.68rem; }
+  .power-box label   { font-size: 0.54rem; white-space: nowrap; flex-shrink: 0; }
+  .power-bar-track   { flex: 1; width: auto !important; height: 10px; min-height: 0; }
+  .power-bar-fill    { position: absolute; top: 0; bottom: 0; left: 0; right: auto; width: 50%; height: 100% !important; border-radius: var(--radius-pill); }
+  .power-hint        { font-size: 0.5rem; white-space: nowrap; flex-shrink: 0; }
+  .power-readout     { min-width: 36px; font-size: 0.68rem; flex-shrink: 0; }
 
-  /* footer — single row of buttons */
   .footer-row {
-    grid-area: footer;
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
     gap: 5px;
     padding: 6px 8px;
+    flex-shrink: 0;
   }
   .action-row {
     display: flex;
@@ -2261,9 +2242,9 @@ h1 {
     width: 100%;
     justify-content: space-between;
   }
-  .aim-controls   { flex: 0 0 auto; padding: 2px; gap: 2px; }
-  .aim-btn        { width: 40px; height: 40px; font-size: 1.1rem; }
-  .aim-label      { display: none; }
+  .aim-controls { flex: 0 0 auto; padding: 2px; gap: 2px; }
+  .aim-btn      { width: 40px; height: 40px; font-size: 1.1rem; }
+  .aim-label    { display: none; }
   .action-row .ghost-btn {
     flex: 1;
     padding: 10px 5px;
@@ -2272,15 +2253,13 @@ h1 {
     justify-content: center;
     border-radius: 10px;
   }
-
-  /* status line */
   .status-line {
-    grid-area: status;
     font-size: 0.7rem;
     padding: 3px 10px 5px;
     text-align: center;
     min-height: 0;
     line-height: 1.4;
+    flex-shrink: 0;
   }
 }
 
@@ -2289,32 +2268,22 @@ h1 {
   body:has(#game-screen.active) { padding: 0; }
 
   .screen.game-screen.active {
+    display: flex;
+    flex-direction: column;
     gap: 0;
     width: 100%;
     height: 100dvh;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas:
-      "header"
-      "table"
-      "footer";
     padding: var(--safe-area-top) 0 var(--safe-area-bottom);
   }
 
-  .match-header {
-    grid-area: header;
-    padding: 3px 8px;
-    gap: 5px;
-  }
+  .match-header   { padding: 3px 8px; gap: 5px; flex-shrink: 0; }
   .player-card    { padding: 4px 8px; }
   .player-avatar  { width: 20px; height: 20px; }
   .player-title   { font-size: 0.66rem; }
   .player-tag     { font-size: 0.56rem; }
   .group-pill     { padding: 3px 5px; font-size: 0.5rem; }
 
-  /* table + vertical power bar side by side */
   .table-stage {
-    grid-area: table;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 40px;
     grid-template-areas: "canvas power";
@@ -2322,6 +2291,8 @@ h1 {
     padding: 2px 6px;
     margin: 0;
     width: 100%;
+    flex: 1;
+    min-height: 0;
     align-items: stretch;
   }
   .table-shell {
@@ -2332,7 +2303,7 @@ h1 {
   }
   .power-box {
     grid-area: power;
-    display: grid;
+    display: grid !important;
     grid-template-rows: auto minmax(0,1fr) auto auto;
     width: 40px;
     height: 100%;
@@ -2344,13 +2315,12 @@ h1 {
   .power-hint      { display: none; }
 
   .footer-row {
-    grid-area: footer;
     flex-direction: row;
     padding: 3px 8px;
     gap: 4px;
+    flex-shrink: 0;
   }
-  .action-row     { gap: 4px; }
   .action-row .ghost-btn { padding: 6px 8px; font-size: 0.64rem; }
-  .aim-btn        { width: 30px; height: 30px; font-size: 0.95rem; }
-  .status-line    { display: none; }
+  .aim-btn     { width: 30px; height: 30px; font-size: 0.95rem; }
+  .status-line { display: none; }
 }

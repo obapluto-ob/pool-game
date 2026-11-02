@@ -344,9 +344,7 @@ function applyTheme(theme) {
 
 function updateLandscapeHint() {
   const hint = document.getElementById('landscape-hint');
-  if (!hint) return;
-  const isGame = document.getElementById('game-screen').classList.contains('active');
-  hint.classList.toggle('game-active', isGame);
+  if (hint) hint.classList.remove('game-active'); // portrait plays fine, never block
 }
 
 function showScreen(screenName) {

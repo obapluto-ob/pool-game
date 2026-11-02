@@ -1729,7 +1729,7 @@ function handlePeerLeft() {
     onlineMode = false;
     onlineRole = null;
     ui();
-    setTimeout(() => showResults(), 1200);
+    showResults();
   } else {
     onlineMode = false;
     onlineRole = null;
@@ -2110,3 +2110,17 @@ document.getElementById('btn-signout').addEventListener('click', () => {
 
 bootAuth();
 requestAnimationFrame(frame);
+
+// ── Presence (online count) ──────────────────────────────────────
+function updateOnlineCountBadge(n) {
+  const el = document.getElementById('online-count-num');
+  if (el) el.textContent = n > 0 ? String(n) : '—';
+}
+
+if (window.FeltoraOnline) {
+  window.FeltoraOnline.joinPresence();
+  window.FeltoraOnline.getOnlineCount().then(updateOnlineCountBadge);
+  window.FeltoraOnline.subscribeOnlineCount(updateOnlineCountBadge);
+  window.addEventListener('pagehide', () => window.FeltoraOnline.leavePresence());
+  window.addEventListener('beforeunload', () => window.FeltoraOnline.leavePresence());
+}

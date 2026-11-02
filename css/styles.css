@@ -976,13 +976,6 @@ canvas {
   touch-action: none;
   cursor: crosshair;
 }
-  display: block;
-  width: 100%;
-  height: auto;
-  user-select: none;
-  touch-action: none;
-  cursor: crosshair;
-}
 
 /* ── Power box ─────────────────────────────────────────────────── */
 .power-box {
@@ -2048,10 +2041,31 @@ h1 {
   font-weight: 600;
 }
 
-/* show only on portrait phones during game */
-@media (max-width: 600px) and (orientation: portrait) {
+/* show only on landscape phones during game — portrait is fine */
+@media (max-width: 600px) and (orientation: landscape) {
   .landscape-hint.game-active { display: flex; }
 }
+
+/* ── Online count badge ───────────────────────────────────────── */
+.online-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,229,160,0.2);
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.online-count-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2.4s ease infinite;
+}
+.online-count-label { color: var(--muted); font-weight: 500; }
 
 /* ── Coin earned toast (results screen) ────────────────────────── */
 .coin-earned-toast {

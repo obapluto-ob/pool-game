@@ -64,9 +64,13 @@ const FeltoraOnline = (() => {
   // ── Spots registry (Firebase Realtime Database REST API) ────────
   // Free project — public read/write rules set to true.
   // Uses REST so no SDK needed. Real-time via SSE (EventSource).
-  const FB_URL = 'https://feltora-spots-default-rtdb.firebaseio.com/spots';
-  let spotsListener = null; // EventSource for real-time push
-  let onSpotsUpdate = null; // callback(spots[]) set by game.js
+  const FB_URL      = 'https://feltora-spots-default-rtdb.firebaseio.com/spots';
+  const FB_PRESENCE = 'https://feltora-spots-default-rtdb.firebaseio.com/presence';
+  let spotsListener    = null; // EventSource for real-time push
+  let presenceListener = null; // EventSource for online count
+  let onSpotsUpdate    = null; // callback(spots[]) set by game.js
+  let presenceId       = null; // this session's presence key
+  let presenceHb       = null; // heartbeat interval
 
   async function publishSpot(code, name, avatar) {
     const spot = { code, name, avatar, ts: Date.now() };
@@ -83,6 +87,64 @@ const FeltoraOnline = (() => {
       local[code] = spot;
       localStorage.setItem('feltora-open-spots', JSON.stringify(local));
     } catch {}
+  }
+
+  // ── Presence (online user count) ───────────────────────────────
+  async function joinPresence() {
+    presenceId = 'u_' + Math.random().toString(36).slice(2, 10);
+    const entry = { ts: Date.now() };
+    try {
+      await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+    } catch {}
+    // heartbeat every 30s
+    if (presenceHb) clearInterval(presenceHb);
+    presenceHb = setInterval(async () => {
+      try {
+        await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ts: Date.now() }),
+        });
+      } catch {}
+    }, 30000);
+  }
+
+  async function leavePresence() {
+    if (presenceHb) { clearInterval(presenceHb); presenceHb = null; }
+    if (!presenceId) return;
+    try { await fetch(`${FB_PRESENCE}/${presenceId}.json`, { method: 'DELETE' }); } catch {}
+    presenceId = null;
+  }
+
+  async function getOnlineCount() {
+    try {
+      const res  = await fetch(`${FB_PRESENCE}.json`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!data) return 0;
+      const now = Date.now();
+      return Object.values(data).filter((e) => e && now - e.ts < 90000).length;
+    } catch { return 0; }
+  }
+
+  function subscribeOnlineCount(callback) {
+    if (presenceListener) { presenceListener.close(); presenceListener = null; }
+    try {
+      presenceListener = new EventSource(`${FB_PRESENCE}.json`);
+      const refresh = () => getOnlineCount().then(callback);
+      presenceListener.addEventListener('put',   refresh);
+      presenceListener.addEventListener('patch', refresh);
+      presenceListener.onerror = () => {
+        if (presenceListener) { presenceListener.close(); presenceListener = null; }
+      };
+    } catch {}
+  }
+
+  function unsubscribeOnlineCount() {
+    if (presenceListener) { presenceListener.close(); presenceListener = null; }
   }
 
   async function removeSpot(code) {
@@ -349,6 +411,11 @@ const FeltoraOnline = (() => {
     getOpenSpots,
     subscribeSpots,
     unsubscribeSpots,
+    joinPresence,
+    leavePresence,
+    getOnlineCount,
+    subscribeOnlineCount,
+    unsubscribeOnlineCount,
   };
 })();
 

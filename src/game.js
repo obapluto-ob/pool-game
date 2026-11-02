@@ -442,7 +442,7 @@ function updateStatusText() {
   powerBox.setAttribute('aria-disabled', String(!canShoot));
   powerBox.tabIndex = canShoot ? 0 : -1;
   document.getElementById('power-hint').textContent = canShoot
-    ? 'Pull up'
+    ? (isHorizontalPowerBar() ? 'Drag →' : 'Pull up')
     : state === 'rolling'
       ? 'In motion'
       : state === 'bot'
@@ -461,7 +461,14 @@ function setPower(value) {
   powerBox.setAttribute('aria-valuenow', String(power));
   powerBox.setAttribute('aria-valuetext', `${power}%`);
   const fill = document.getElementById('power-bar-fill');
-  fill.style.height = `${power}%`;
+  const horizontal = isHorizontalPowerBar();
+  if (horizontal) {
+    fill.style.width  = `${power}%`;
+    fill.style.height = '100%';
+  } else {
+    fill.style.height = `${power}%`;
+    fill.style.width  = '';
+  }
   // colour zones
   let fillColor;
   if (power >= 100) {
@@ -826,10 +833,20 @@ function shoot() {
   ui();
 }
 
-function updatePulledPower(clientY) {
+function isHorizontalPowerBar() {
+  // portrait mobile uses horizontal bar
+  return window.matchMedia('(max-width: 680px) and (orientation: portrait)').matches;
+}
+
+function updatePulledPower(clientX, clientY) {
   if (powerPullStart === null) return;
-  // increased sensitivity: 1px drag = 1% power change
-  setPower(powerStartingValue - (clientY - powerPullStart) * 1.0);
+  if (isHorizontalPowerBar()) {
+    // drag right = more power
+    setPower(powerStartingValue + (clientX - powerPullStart) * 1.0);
+  } else {
+    // drag up = more power
+    setPower(powerStartingValue - (clientY - powerPullStart) * 1.0);
+  }
 }
 
 function segmentIsClear(start, end, ignoredBall) {
@@ -1282,19 +1299,19 @@ powerBox.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   powerPointerActive = true;
   powerPointerId = event.pointerId;
-  powerPullStart = event.clientY;
+  powerPullStart = isHorizontalPowerBar() ? event.clientX : event.clientY;
   powerStartingValue = Number(document.getElementById('pw').value);
   powerBox.classList.add('power-charging');
   powerBox.setPointerCapture(event.pointerId);
 });
 powerBox.addEventListener('pointermove', (event) => {
   if (powerPointerActive && event.pointerId === powerPointerId) {
-    updatePulledPower(event.clientY);
+    updatePulledPower(event.clientX, event.clientY);
   }
 });
 powerBox.addEventListener('pointerup', (event) => {
   if (!powerPointerActive || event.pointerId !== powerPointerId) return;
-  updatePulledPower(event.clientY);
+  updatePulledPower(event.clientX, event.clientY);
   powerPointerActive = false;
   powerPointerId = null;
   powerPullStart = null;

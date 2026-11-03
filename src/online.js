@@ -567,16 +567,16 @@ const FeltoraOnline = (() => {
       // heartbeat: re-publish every 45s to keep spot alive
       if (spotHeartbeat) clearInterval(spotHeartbeat);
       spotHeartbeat = setInterval(() => {
-        if (roomCode) publishSpot(roomCode, name, avatar);
+        if (roomCode && !conn) publishSpot(roomCode, name, avatar);
       }, 45000);
       onReady(roomCode);
     });
 
     peer.on('connection', (c) => {
-      wireConn(c, null, null, () => {
-        removeSpot(roomCode);
-        if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
-      });
+      // stop heartbeat immediately — don't wait for data channel open
+      if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
+      removeSpot(roomCode);
+      wireConn(c, null, null, null);
     });
 
     peer.on('call', (call) => { answerCall(call); });

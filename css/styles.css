@@ -2190,7 +2190,7 @@ h1 {
   }
   .table-shell {
     position: relative;
-    width: min(180vw, calc(100dvh - 290px));
+    width: min(180vw, max(0px, calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom) - 285px)));
     max-height: none;
     border-radius: 10px;
     transform: rotate(90deg);

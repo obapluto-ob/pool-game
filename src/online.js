@@ -30,24 +30,40 @@ const FeltoraOnline = (() => {
   }
 
   // ── PeerJS config ────────────────────────────────────────────────
-  // Metered TURN — handles strict NAT (mobile networks, corporate WiFi)
-  const METERED_USERNAME   = 'fa204cf077001153a288e315';
-  const METERED_CREDENTIAL = 'ThTKuVAdTjnnzRet';
-  const PEER_CONFIG = {
-    host: '0.peerjs.com', port: 443, path: '/', secure: true,
-    config: {
-      iceServers: [
-        { urls: 'stun:stun.relay.metered.ca:80' },
-        { urls: 'turn:global.relay.metered.ca:80',                  username: METERED_USERNAME, credential: METERED_CREDENTIAL },
-        { urls: 'turn:global.relay.metered.ca:80?transport=tcp',    username: METERED_USERNAME, credential: METERED_CREDENTIAL },
-        { urls: 'turn:global.relay.metered.ca:443',                 username: METERED_USERNAME, credential: METERED_CREDENTIAL },
-        { urls: 'turns:global.relay.metered.ca:443?transport=tcp',  username: METERED_USERNAME, credential: METERED_CREDENTIAL },
-      ],
-      iceCandidatePoolSize: 10
-    },
-    debug: 0,
-    pingInterval: 3000,
-  };
+  // ICE servers are fetched at runtime from Metered so credentials
+  // are never hardcoded in source. Falls back to Google STUN if fetch fails.
+  const METERED_API_KEY = '6bdf4ab04af9476b5e811cdda567b7bd4251';
+  const METERED_URL     = `https://poolgameapp.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
+
+  const FALLBACK_ICE = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  let cachedIceServers = null;
+
+  async function getIceServers() {
+    if (cachedIceServers) return cachedIceServers;
+    try {
+      const res = await fetch(METERED_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      cachedIceServers = await res.json();
+      return cachedIceServers;
+    } catch (e) {
+      console.warn('[online] failed to fetch TURN credentials, using fallback', e);
+      return FALLBACK_ICE;
+    }
+  }
+
+  async function buildPeerConfig() {
+    const iceServers = await getIceServers();
+    return {
+      host: '0.peerjs.com', port: 443, path: '/', secure: true,
+      config: { iceServers, iceCandidatePoolSize: 10 },
+      debug: 0,
+      pingInterval: 3000,
+    };
+  }
 
   // ── Spots registry (Firebase Realtime Database REST API) ────────
   // Free project — public read/write rules set to true.
@@ -326,7 +342,7 @@ const FeltoraOnline = (() => {
   }
 
   // ── Host ─────────────────────────────────────────────────────────
-  function host(onReady, onPeer, onLeft, onMsg) {
+  async function host(onReady, onPeer, onLeft, onMsg) {
     destroyPeer();
     onPeerReady = onPeer;
     onPeerLeft  = onLeft;
@@ -334,7 +350,7 @@ const FeltoraOnline = (() => {
     role = 'host';
     roomCode = genCode();
 
-    peer = new Peer('feltora-' + roomCode, PEER_CONFIG);
+    peer = new Peer('feltora-' + roomCode, await buildPeerConfig());
 
     peer.on('open', () => {
       const name   = window._feltoraLocalName   || 'Player';
@@ -368,7 +384,7 @@ const FeltoraOnline = (() => {
   }
 
   // ── Guest ────────────────────────────────────────────────────────
-  function join(code, onConnected, onPeer, onLeft, onMsg) {
+  async function join(code, onConnected, onPeer, onLeft, onMsg) {
     destroyPeer();
     onPeerReady = onPeer;
     onPeerLeft  = onLeft;
@@ -376,7 +392,7 @@ const FeltoraOnline = (() => {
     role = 'guest';
     roomCode = code.toUpperCase().trim();
 
-    peer = new Peer(undefined, PEER_CONFIG);
+    peer = new Peer(undefined, await buildPeerConfig());
     let settled = false;
     let connected = false;
     const timeout = setTimeout(() => fail('timeout'), 30000);

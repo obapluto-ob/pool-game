@@ -16,7 +16,12 @@ const Auth = (() => {
   }
 
   function load() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); }
+    try {
+      const data = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+      // guard against corrupted non-object data
+      if (typeof data !== 'object' || Array.isArray(data) || data === null) return {};
+      return data;
+    }
     catch { return {}; }
   }
 

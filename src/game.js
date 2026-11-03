@@ -2412,7 +2412,7 @@ document.getElementById('btn-register').addEventListener('click', () => {
 document.getElementById('reg-username').addEventListener('input', () => {
   const val = document.getElementById('reg-username').value.trim().toLowerCase();
   const errEl = document.getElementById('reg-error');
-  if (!val || val.length < 3) { errEl.hidden = true; return; }
+  if (!val || val.length < 3 || !/^[a-z0-9_]+$/.test(val)) { errEl.hidden = true; return; }
   const taken = window.FeltoraAuth.getAccount(val) !== null;
   if (taken) {
     errEl.textContent = `"${val}" is already taken.`;

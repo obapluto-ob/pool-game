@@ -1,13 +1,8 @@
-const CACHE = 'feltora-v1';
+const CACHE = 'feltora-v2';
 const PRECACHE = [
-  '/',
   '/index.html',
   '/css/styles.css',
   '/assets/logo.svg',
-  '/src/auth.js',
-  '/src/mascots.js',
-  '/src/online.js',
-  '/src/game.js',
   '/manifest.json',
 ];
 

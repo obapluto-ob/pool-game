@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261104-fix6">
+  <link rel="stylesheet" href="css/styles.css?v=20261104-fix13">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -434,19 +434,20 @@
     </section>
 
     <!-- ── TUTORIAL OVERLAY ──────────────────────────────────── -->
-    <div id="tutorial-overlay" style="display:none;" aria-modal="true" role="dialog" aria-label="How to play FELTORA">
+    <div id="tutorial-overlay" aria-modal="true" role="dialog" aria-label="How to play FELTORA">
       <div id="tutorial-backdrop"></div>
+      <div id="tutorial-spotlight"></div>
+      <svg id="tutorial-arrow" width="24" height="24" viewBox="0 0 24 24" style="display:none"><polygon points="12,0 24,24 0,24" fill="#00f0a8"/></svg>
       <div id="tutorial-card">
         <div id="tutorial-step-indicator"></div>
-        <div id="tutorial-icon"></div>
+        <span id="tutorial-icon"></span>
         <h3 id="tutorial-title"></h3>
         <p id="tutorial-body"></p>
         <div id="tutorial-actions">
-          <button id="tutorial-skip" type="button">Skip</button>
+          <button id="tutorial-skip" type="button">Skip tour</button>
           <button id="tutorial-next" type="button">Next →</button>
         </div>
       </div>
-      <div id="tutorial-spotlight"></div>
     </div>
 
     <!-- ── RESULTS SCREEN ─────────────────────────────────────── -->
@@ -508,7 +509,7 @@
   <script src="src/auth.js?v=20261104-fix12" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261104-fix10" defer></script>
-  <script src="src/game.js?v=20261104-fix12" defer></script>
+  <script src="src/game.js?v=20261104-fix13" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

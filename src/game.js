@@ -377,7 +377,9 @@ function showScreen(screenName) {
   document.getElementById('lobby-screen').classList.toggle('active', screenName === 'lobby');
   document.getElementById('game-screen').classList.toggle('active', screenName === 'game');
   document.getElementById('results-screen').classList.toggle('active', screenName === 'results');
-  if (screenName === 'game') setTimeout(() => typeof startTutorial === 'function' && startTutorial(false), 800);
+  if (screenName === 'game' || screenName === 'lobby') {
+    setTimeout(() => typeof startTutorial === 'function' && startTutorial(false), 900);
+  }
 }
 
 function updatePlayerDisplay() {
@@ -2442,129 +2444,182 @@ requestAnimationFrame(frame);
 const TUTORIAL_STEPS = [
   {
     icon: '🎱',
-    title: 'Welcome to FELTORA',
-    body: 'Classic 8-ball pool in your browser. Pocket all your balls (solids or stripes), then sink the 8-ball to win. First touch on the table assigns your group.',
+    title: 'Welcome to FELTORA!',
+    body: 'Classic 8-ball pool in your browser. Pocket all your balls (solids or stripes), then sink the 8-ball to win.',
     spotlight: null,
+    screen: 'any',
+  },
+  {
+    icon: '🎮',
+    title: 'Play Online or vs Bot',
+    body: 'Tap “Play Online” to challenge a friend with a 6-character room code, or “Play vs Bot” to practice against AI.',
+    spotlight: 'mode-list',
+    screen: 'lobby',
   },
   {
     icon: '🔮',
     title: 'Aim your shot',
-    body: 'Drag anywhere on the table to rotate the cue. The dashed line shows where the cue ball will travel. Red line means an illegal hit — pick a different angle.',
+    body: 'Drag anywhere on the table to rotate the cue. The dashed line shows where the ball travels. A red line means an illegal hit.',
     spotlight: 'canvas',
+    screen: 'game',
   },
   {
     icon: '⚡',
     title: 'Set your power',
-    body: 'Pull up on the PWR bar (or drag right on portrait mobile) to charge your shot. Release to fire. The bar glows red at full power — use it wisely.',
+    body: 'Pull UP on the PWR bar to charge your shot, then release to fire. On portrait mobile, drag RIGHT instead.',
     spotlight: 'power-box',
+    screen: 'game',
   },
   {
     icon: '🎯',
     title: 'Fine-tune your aim',
-    body: 'Use the ◂ AIM ▸ buttons for precise angle adjustments. On desktop, arrow keys also work. Space bar fires the shot.',
-    spotlight: 'aim-controls-wrap',
+    body: 'Use the ◂ AIM ▸ buttons for precise adjustments. On desktop, arrow keys work too. Space bar fires.',
+    spotlight: 'aim-controls',
+    screen: 'game',
   },
   {
-    icon: '📱',
-    title: 'Play anywhere',
-    body: 'FELTORA works on any device. Challenge a friend online with a 6-character room code, or sharpen your skills against the bot. Good luck!',
+    icon: '🏆',
+    title: 'You\'re ready!',
+    body: 'First ball you pocket assigns your group — solids or stripes. Clear your group then legally pocket the 8-ball to win. Good luck!',
     spotlight: null,
+    screen: 'any',
   },
 ];
 
 let tutStep = 0;
 let tutActive = false;
 
-function getTutSpotlightRect(key) {
+function getTutSpotlightEl(key) {
   if (!key) return null;
-  let el;
-  if (key === 'canvas') el = document.getElementById('c');
-  else if (key === 'power-box') el = document.getElementById('power-box');
-  else if (key === 'aim-controls-wrap') el = document.querySelector('.aim-controls');
-  if (!el) return null;
+  if (key === 'canvas')       return document.getElementById('c');
+  if (key === 'power-box')    return document.getElementById('power-box');
+  if (key === 'aim-controls') return document.querySelector('.aim-controls');
+  if (key === 'mode-list')    return document.querySelector('.mode-list');
+  return null;
+}
+
+function positionTutCard() {
+  const card = document.getElementById('tutorial-card');
+  const spotlight = document.getElementById('tutorial-spotlight');
+  const arrow = document.getElementById('tutorial-arrow');
+  const step = TUTORIAL_STEPS[tutStep];
+  const el = getTutSpotlightEl(step.spotlight);
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const cardW = Math.min(360, vw - 24);
+  const cardH = card.offsetHeight || 240;
+  const pad = 16;
+
+  // reset
+  arrow.style.display = 'none';
+  spotlight.style.display = 'none';
+  card.style.top = '';
+  card.style.bottom = '';
+  card.style.transform = 'translateX(-50%)';
+
+  if (!el) {
+    // centre card vertically
+    card.style.top = `${Math.max(pad, (vh - cardH) / 2)}px`;
+    return;
+  }
+
   const r = el.getBoundingClientRect();
-  return { top: r.top - 8, left: r.left - 8, width: r.width + 16, height: r.height + 16 };
+  // spotlight
+  spotlight.style.display = 'block';
+  spotlight.style.top    = `${r.top - 6}px`;
+  spotlight.style.left   = `${r.left - 6}px`;
+  spotlight.style.width  = `${r.width + 12}px`;
+  spotlight.style.height = `${r.height + 12}px`;
+
+  // try below first, then above, then centre
+  const belowTop = r.bottom + pad;
+  const aboveTop = r.top - cardH - pad;
+  if (belowTop + cardH + pad <= vh) {
+    card.style.top = `${belowTop}px`;
+  } else if (aboveTop >= pad) {
+    card.style.top = `${aboveTop}px`;
+  } else {
+    // not enough room above or below — centre vertically, ensure no overlap
+    card.style.top = `${Math.max(pad, Math.min(vh - cardH - pad, (vh - cardH) / 2))}px`;
+  }
+
+  // clamp horizontal so card never goes off screen
+  const cardLeft = Math.max(pad, Math.min(vw - cardW - pad, (vw - cardW) / 2));
+  card.style.left = `${cardLeft}px`;
+  card.style.transform = 'none';
 }
 
 function renderTutStep() {
   const step = TUTORIAL_STEPS[tutStep];
-  const overlay = document.getElementById('tutorial-overlay');
-  const card    = document.getElementById('tutorial-card');
-  const spotlight = document.getElementById('tutorial-spotlight');
-
   document.getElementById('tutorial-icon').textContent  = step.icon;
   document.getElementById('tutorial-title').textContent = step.title;
   document.getElementById('tutorial-body').textContent  = step.body;
   document.getElementById('tutorial-next').textContent  =
-    tutStep === TUTORIAL_STEPS.length - 1 ? 'Got it ✓' : 'Next →';
+    tutStep === TUTORIAL_STEPS.length - 1 ? '🎮 Let\'s play!' : 'Next →';
 
-  // step dots
   const dots = document.getElementById('tutorial-step-indicator');
-  dots.innerHTML = TUTORIAL_STEPS.map((_, i) =>
-    `<span class="${i <= tutStep ? 'done' : ''}"></span>`
-  ).join('');
+  dots.innerHTML = TUTORIAL_STEPS.map((_, i) => {
+    const cls = i < tutStep ? 'done' : i === tutStep ? 'active done' : '';
+    return `<span class="${cls}"></span>`;
+  }).join('');
 
-  // spotlight
-  const rect = getTutSpotlightRect(step.spotlight);
-  if (rect) {
-    spotlight.style.cssText = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px;display:block;`;
-    // position card above or below spotlight
-    const cardH = 220;
-    const below = rect.top + rect.height + 16;
-    const above = rect.top - cardH - 16;
-    card.style.top = below + cardH < window.innerHeight ? `${below}px` : `${Math.max(16, above)}px`;
-  } else {
-    spotlight.style.display = 'none';
-    card.style.top = '50%';
-    card.style.transform = 'translateX(-50%) translateY(-50%)';
-  }
-  if (rect) card.style.transform = 'translateX(-50%)';
+  // re-run positioning after a frame so card height is known
+  requestAnimationFrame(() => positionTutCard());
+}
+
+function getActiveScreen() {
+  if (document.getElementById('game-screen').classList.contains('active'))   return 'game';
+  if (document.getElementById('lobby-screen').classList.contains('active'))  return 'lobby';
+  if (document.getElementById('auth-screen').classList.contains('active'))   return 'auth';
+  return 'other';
+}
+
+function getFirstRelevantStep() {
+  const screen = getActiveScreen();
+  return TUTORIAL_STEPS.findIndex((s) => s.screen === 'any' || s.screen === screen);
 }
 
 function startTutorial(force = false) {
   try {
-    if (!force && localStorage.getItem('feltora-tutorial-done')) return;
+    // use sessionStorage so it auto-shows once per session, not permanently blocked
+    if (!force && sessionStorage.getItem('feltora-tutorial-seen')) return;
   } catch {}
-  // only show in-game steps when game screen is active, else show intro steps
-  const onGame = document.getElementById('game-screen').classList.contains('active');
-  if (!onGame && !force) return;
-  tutStep = 0;
+  tutStep = Math.max(0, getFirstRelevantStep());
   tutActive = true;
   const overlay = document.getElementById('tutorial-overlay');
-  overlay.style.display = 'block';
   overlay.classList.add('active');
   renderTutStep();
 }
 
 function closeTutorial() {
   tutActive = false;
-  const overlay = document.getElementById('tutorial-overlay');
-  overlay.style.display = 'none';
-  overlay.classList.remove('active');
-  try { localStorage.setItem('feltora-tutorial-done', '1'); } catch {}
+  document.getElementById('tutorial-overlay').classList.remove('active');
+  try { sessionStorage.setItem('feltora-tutorial-seen', '1'); } catch {}
 }
 
-document.getElementById('tutorial-next').addEventListener('click', () => {
-  if (tutStep < TUTORIAL_STEPS.length - 1) {
-    tutStep++;
-    renderTutStep();
-  } else {
+function tutNext() {
+  // skip steps not relevant to current screen
+  const screen = getActiveScreen();
+  let next = tutStep + 1;
+  while (next < TUTORIAL_STEPS.length) {
+    const s = TUTORIAL_STEPS[next];
+    if (s.screen === 'any' || s.screen === screen) break;
+    next++;
+  }
+  if (next >= TUTORIAL_STEPS.length) {
     closeTutorial();
-  }
-});
-
-document.getElementById('tutorial-skip').addEventListener('click', closeTutorial);
-
-document.getElementById('tutorial-backdrop').addEventListener('click', closeTutorial);
-
-document.getElementById('how-to-play-btn').addEventListener('click', () => {
-  // if game is not active, start a bot game first so spotlight targets exist
-  if (!document.getElementById('game-screen').classList.contains('active')) {
-    startTutorial(true);
   } else {
-    startTutorial(true);
+    tutStep = next;
+    renderTutStep();
   }
-});
+}
+
+document.getElementById('tutorial-next').addEventListener('click', tutNext);
+document.getElementById('tutorial-skip').addEventListener('click', closeTutorial);
+document.getElementById('tutorial-backdrop').addEventListener('click', closeTutorial);
+window.addEventListener('resize', () => { if (tutActive) positionTutCard(); });
+
+document.getElementById('how-to-play-btn').addEventListener('click', () => startTutorial(true));
 
 // auto-show for first-time users after they enter the game screen
 // patched directly into showScreen below

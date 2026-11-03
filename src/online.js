@@ -18,7 +18,12 @@ const FeltoraOnline = (() => {
   let onPeerReady = null;
   let onPeerLeft = null;
   let micEnabled = false;
+  let micIssue = '';
+  let voiceStreamSent = false;
   let voiceActive = false;
+  let voiceStatus = 'idle';
+  let voiceError = '';
+  let voiceTimeout = null;
   let spotHeartbeat = null;
 
   // ── Code generator ───────────────────────────────────────────────
@@ -224,6 +229,7 @@ const FeltoraOnline = (() => {
     if (hostedCode) removeSpot(hostedCode);
     if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
     if (audioCall) { try { audioCall.close(); } catch {} audioCall = null; }
+    if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
     if (conn)      { try { conn.close();      } catch {} conn = null; }
     if (peer)      { try { peer.destroy();    } catch {} peer = null; }
     if (localStream) {
@@ -236,7 +242,11 @@ const FeltoraOnline = (() => {
       remoteAudio = null;
     }
     micEnabled = false;
+    micIssue = '';
+    voiceStreamSent = false;
     voiceActive = false;
+    voiceStatus = 'idle';
+    voiceError = '';
   }
 
   function sendData(msg) {
@@ -248,7 +258,13 @@ const FeltoraOnline = (() => {
   // ── Voice ────────────────────────────────────────────────────────
   async function startMic() {
     if (localStream) return localStream;
+    voiceStatus = 'requesting-mic';
+    voiceError = '';
+    updateVoiceUI();
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Microphone access requires a supported browser and secure connection.');
+      }
       localStream = await navigator.mediaDevices.getUserMedia({
         video: false,
         audio: {
@@ -258,9 +274,20 @@ const FeltoraOnline = (() => {
           sampleRate: 48000,
         }
       });
+      micEnabled = false;
+      micIssue = '';
+      localStream.getAudioTracks().forEach((track) => { track.enabled = false; });
+      voiceStatus = 'waiting';
+      updateVoiceUI();
       return localStream;
     } catch (e) {
       console.warn('[online] mic access denied', e);
+      micIssue = e.name === 'NotAllowedError' || e.name === 'SecurityError'
+        ? 'mic-blocked'
+        : 'mic-unavailable';
+      voiceStatus = micIssue;
+      voiceError = e.message || 'Check microphone permission and browser settings.';
+      updateVoiceUI();
       return null;
     }
   }
@@ -274,32 +301,111 @@ const FeltoraOnline = (() => {
     }
     remoteAudio.srcObject = stream;
     voiceActive = true;
+    if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
+    voiceStatus = micIssue || 'connected';
     updateVoiceUI();
+    remoteAudio.play().catch((error) => {
+      console.warn('[online] remote audio playback was blocked', error);
+      voiceStatus = 'tap-to-hear';
+      voiceError = 'Tap the microphone control to allow voice audio playback.';
+      updateVoiceUI();
+    });
   }
 
-  async function callPeer(peerId) {
-    const stream = await startMic();
-    if (!stream || !peer) return;
-    audioCall = peer.call(peerId, stream);
-    audioCall.on('stream', attachRemoteAudio);
-    audioCall.on('close', () => { voiceActive = false; updateVoiceUI(); });
-    audioCall.on('error', (e) => console.warn('[online] call error', e));
+  function watchAudioCall(call) {
+    if (voiceTimeout) clearTimeout(voiceTimeout);
+    voiceStatus = 'connecting';
+    voiceError = '';
+    updateVoiceUI();
+    voiceTimeout = setTimeout(() => {
+      voiceTimeout = null;
+      if (audioCall !== call || voiceActive) return;
+      voiceStatus = 'unavailable';
+      voiceError = 'Voice connection timed out. Check both players’ microphone permissions and network.';
+      updateVoiceUI();
+    }, 20000);
+    call.on('stream', (stream) => {
+      if (audioCall === call) attachRemoteAudio(stream);
+    });
+    call.on('close', () => {
+      if (audioCall !== call) return;
+      if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
+      audioCall = null;
+      voiceActive = false;
+      voiceStatus = 'disconnected';
+      voiceError = 'Voice connection closed.';
+      updateVoiceUI();
+    });
+    call.on('error', (e) => {
+      if (audioCall !== call) return;
+      console.warn('[online] call error', e);
+      if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
+      voiceStatus = 'unavailable';
+      voiceError = e.message || 'Could not establish the voice connection.';
+      updateVoiceUI();
+    });
+  }
+
+  function callPeer(peerId, replace = false) {
+    if (!localStream || !peer || !peerId) return;
+    if (audioCall && !replace) return;
+    if (audioCall) {
+      const previousCall = audioCall;
+      audioCall = null;
+      previousCall.close();
+    }
+    try {
+      audioCall = peer.call(peerId, localStream);
+      voiceStreamSent = true;
+      watchAudioCall(audioCall);
+    } catch (e) {
+      console.warn('[online] could not start voice call', e);
+      voiceStatus = 'unavailable';
+      voiceError = e.message || 'Could not start the voice connection.';
+      updateVoiceUI();
+    }
   }
 
   function answerCall(call) {
-    startMic().then((stream) => {
-      if (!stream) { call.answer(); return; }
-      call.answer(stream);
-    });
-    call.on('stream', attachRemoteAudio);
-    call.on('close', () => { voiceActive = false; updateVoiceUI(); });
+    if (audioCall && audioCall !== call) {
+      const previousCall = audioCall;
+      audioCall = null;
+      previousCall.close();
+    }
     audioCall = call;
+    voiceStreamSent = !!localStream;
+    watchAudioCall(call);
+    try {
+      call.answer(localStream || undefined);
+    } catch (e) {
+      console.warn('[online] could not answer voice call', e);
+      voiceStatus = 'unavailable';
+      voiceError = e.message || 'Could not answer the voice connection.';
+      updateVoiceUI();
+    }
   }
 
-  function toggleMic() {
-    if (!localStream) return;
+  async function toggleMic() {
+    if (voiceStatus === 'tap-to-hear' && remoteAudio) {
+      remoteAudio.play().then(() => {
+        voiceStatus = localStream ? 'connected' : 'mic-blocked';
+        voiceError = '';
+        updateVoiceUI();
+      }).catch((error) => {
+        console.warn('[online] remote audio playback could not start', error);
+      });
+    }
+    if (!localStream && !await startMic()) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
+    const retryVoice = voiceStatus === 'unavailable' || voiceStatus === 'disconnected';
+    if (micEnabled && role === 'guest' && (!voiceStreamSent || retryVoice)) {
+      sendData({ type: 'voice-ready' });
+      voiceStatus = 'waiting-host';
+      updateVoiceUI();
+    } else if (micEnabled && role === 'host' && (!audioCall || retryVoice)) {
+      callPeer(conn?.peer, !!audioCall);
+    }
     updateVoiceUI();
   }
 
@@ -308,7 +414,23 @@ const FeltoraOnline = (() => {
     if (!btn) return;
     btn.dataset.active = String(voiceActive);
     btn.dataset.muted  = String(!micEnabled);
-    btn.textContent    = !voiceActive ? '🎙 Connecting…' : micEnabled ? '🎙 Mic On' : '🎙 Muted';
+    const labels = {
+      idle: '🎙 Enable mic',
+      'requesting-mic': '🎙 Allow mic…',
+      waiting: micEnabled ? '🎙 Mic on · finding friend…' : '🎙 Waiting for friend…',
+      'waiting-host': micEnabled ? '🎙 Mic on · waiting for host…' : '🎙 Waiting for host…',
+      connecting: micEnabled ? '🎙 Mic on · connecting…' : '🎙 Connecting…',
+      connected: micEnabled ? '🎙 Mic On' : '🎙 Muted',
+      'mic-blocked': '🎙 Mic blocked',
+      'mic-unavailable': '🎙 Mic unavailable',
+      unavailable: '🎙 Voice unavailable',
+      disconnected: '🎙 Voice disconnected',
+      'tap-to-hear': '🎙 Tap to hear'
+    };
+    btn.dataset.status = voiceStatus;
+    btn.textContent = labels[voiceStatus] || '🎙 Voice unavailable';
+    btn.title = voiceError || 'Voice chat with your online opponent.';
+    btn.setAttribute('aria-label', voiceError ? `${labels[voiceStatus]}. ${voiceError}` : labels[voiceStatus]);
     btn.setAttribute('aria-pressed', String(micEnabled));
   }
 
@@ -326,7 +448,8 @@ const FeltoraOnline = (() => {
     conn.on('data', (msg) => {
       if (msg.type === 'hello') {
         if (onPeerReady) onPeerReady(msg.name, msg.avatar);
-        if (role === 'host') callPeer(conn.peer);
+      } else if (msg.type === 'voice-ready') {
+        if (role === 'host') callPeer(conn.peer, true);
       } else if (onStateMsg) {
         onStateMsg(msg);
       }

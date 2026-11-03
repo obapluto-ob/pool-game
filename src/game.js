@@ -1789,12 +1789,7 @@ function startOnlineGame() {
   stopSpotsPolling();
   newGame();
   document.getElementById('voice-toggle-btn').hidden = false;
-  window.FeltoraOnline.startMic().then((stream) => {
-    if (stream) {
-      stream.getAudioTracks().forEach((t) => { t.enabled = true; });
-      window.FeltoraOnline.updateVoiceUI();
-    }
-  });
+  window.FeltoraOnline.updateVoiceUI();
 }
 
 function handlePeerLeft() {

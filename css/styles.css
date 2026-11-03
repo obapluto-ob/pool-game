@@ -846,6 +846,13 @@ h1 {
   background: var(--panel-soft);
   color: var(--faint);
 }
+.voice-btn[data-status="mic-blocked"],
+.voice-btn[data-status="mic-unavailable"],
+.voice-btn[data-status="unavailable"],
+.voice-btn[data-status="disconnected"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
 
 /* ── Info tiles ────────────────────────────────────────────────── */
 .settings-grid {

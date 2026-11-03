@@ -1,6 +1,9 @@
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
 const W = 900, H = 500, L = 50, T = 50, R = 850, B = 450, BR = 10;
+const TABLE_CENTER_Y = H / 2;
+const HEAD_STRING = L + (R - L) / 4;
+const FOOT_SPOT = L + (R - L) * 3 / 4;
 const POCKETS = [[L, T, 22], [450, T - 4, 20], [R, T, 22], [L, B, 22], [450, B + 4, 20], [R, B, 22]];
 const BALL_BALL_RESTITUTION = 0.94;
 const CUSHION_RESTITUTION = 0.8;
@@ -27,7 +30,7 @@ const feltPalettes = {
 const playerNames = ['Player One', 'Player 2'];
 const playerAvatars = ['marlow', 'rook'];
 let groupBallNumbers = [null, null];
-let balls, cue, state, turn, groups, aim, pocketed, msg, winner, ptr = { x: 230, y: 250 };
+let balls, cue, state, turn, groups, aim, pocketed, msg, winner, ptr = { x: HEAD_STRING, y: TABLE_CENTER_Y };
 let selectedCue = 'wood';
 let last = null, acc = 0;
 let lastOnlineStateAt = 0;
@@ -566,7 +569,7 @@ function newGame(options = {}) {
   if (rematchBtn) { rematchBtn.textContent = 'Rematch'; rematchBtn.disabled = false; }
   window.clearTimeout(botTimer);
   botTimer = null;
-  balls = [{ n: 0, x: 230, y: 250, vx: 0, vy: 0, on: true }];
+  balls = [{ n: 0, x: HEAD_STRING, y: TABLE_CENTER_Y, vx: 0, vy: 0, on: true }];
   cue = balls[0];
   // Rack: 8-ball fixed at centre (slot 4), one corner solid, one corner stripe, rest random
   function rackShuffle(arr) {
@@ -591,7 +594,7 @@ function newGame(options = {}) {
   let si = 0;
   rowDef.forEach((count, i) => {
     for (let j = 0; j < count; j++) {
-      balls.push({ n: slots[si++], x: 600 + i * 17.7, y: 250 + (j - (count - 1) / 2) * 20.4, vx: 0, vy: 0, on: true });
+      balls.push({ n: slots[si++], x: FOOT_SPOT + i * 17.7, y: TABLE_CENTER_Y + (j - (count - 1) / 2) * 20.4, vx: 0, vy: 0, on: true });
     }
   });
   state = 'aim';
@@ -613,7 +616,7 @@ function newGame(options = {}) {
   powerPullAxis = null;
   powerPointerActive = false;
   document.getElementById('power-box').classList.remove('power-charging');
-  ptr = { x: 230, y: 250 };
+  ptr = { x: HEAD_STRING, y: TABLE_CENTER_Y };
   setPower(50);
   if (openGame) showScreen('game');
   ui();
@@ -811,7 +814,7 @@ function endShot() {
     msg = 'Only the 8-ball is left.';
   }
 
-  aim = Math.atan2(250 - cue.y, 600 - cue.x);
+  aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
   turnRemaining = 30;
   setPower(50);
   ui();
@@ -946,7 +949,7 @@ function chooseBotShot() {
 }
 
 function placeBotCueBall() {
-  let best = { x: 230, y: 250, clearance: -Infinity };
+  let best = { x: HEAD_STRING, y: TABLE_CENTER_Y, clearance: -Infinity };
   for (let x = L + BR + 4; x <= R - BR - 4; x += 24) {
     for (let y = T + BR + 4; y <= B - BR - 4; y += 24) {
       if (!valid(x, y)) continue;
@@ -960,7 +963,7 @@ function placeBotCueBall() {
   cue.y = best.y;
   cue.on = true;
   cue.vx = cue.vy = 0;
-  aim = Math.atan2(250 - cue.y, 600 - cue.x);
+  aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
 }
 
 function scheduleBotTurn() {
@@ -1111,8 +1114,8 @@ function draw() {
   g.globalAlpha = document.documentElement.dataset.theme === 'light' ? .23 : .2;
   g.lineWidth = 1.5;
   g.beginPath();
-  g.moveTo(230, T);
-  g.lineTo(230, B);
+  g.moveTo(HEAD_STRING, T);
+  g.lineTo(HEAD_STRING, B);
   g.stroke();
   g.globalAlpha = 1;
 
@@ -1321,7 +1324,7 @@ cv.addEventListener('pointerup', (e) => {
         window.FeltoraOnline.send({ type: 'place', x: cue.x, y: cue.y });
       }
       state = 'aim';
-      aim = Math.atan2(250 - cue.y, 600 - cue.x);
+      aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
       msg = '';
       turnRemaining = 30;
     } else {
@@ -2038,7 +2041,7 @@ function handleOnlineMsg(msg_) {
       cue.on = true;
       if (valid(cue.x, cue.y)) {
         state = 'aim';
-        aim = Math.atan2(250 - cue.y, 600 - cue.x);
+        aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
         msg = '';
         turnRemaining = 30;
         ui();
@@ -2166,11 +2169,11 @@ function frame(t) {
       if (expiredState === 'place') {
         cue.on = true;
         cue.vx = cue.vy = 0;
-        cue.x = 230;
-        cue.y = 250;
+        cue.x = HEAD_STRING;
+        cue.y = TABLE_CENTER_Y;
       }
       state = 'aim';
-      aim = Math.atan2(250 - cue.y, 600 - cue.x);
+      aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
       msg = 'Turn expired. Your turn.';
       ui();
       if (onlineMode && onlineRole === 'host') sendOnlineState();

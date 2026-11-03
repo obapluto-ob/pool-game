@@ -25,6 +25,10 @@ const FeltoraOnline = (() => {
   let voiceError = '';
   let voiceTimeout = null;
   let spotHeartbeat = null;
+  let pingTimer = null;
+  let pongTimer = null;
+  let onConnectionLost = null;
+  let onConnectionRestored = null;
 
   // ── Code generator ───────────────────────────────────────────────
   function genCode() {
@@ -275,6 +279,9 @@ const FeltoraOnline = (() => {
     onPeerLeft = null;
     if (hostedCode) removeSpot(hostedCode);
     if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
+    stopPing();
+    onConnectionLost = null;
+    onConnectionRestored = null;
     if (audioCall) { try { audioCall.close(); } catch {} audioCall = null; }
     if (voiceTimeout) { clearTimeout(voiceTimeout); voiceTimeout = null; }
     if (conn)      { try { conn.close();      } catch {} conn = null; }
@@ -482,6 +489,24 @@ const FeltoraOnline = (() => {
   }
 
   // ── Data channel ─────────────────────────────────────────────────
+  function startPing() {
+    stopPing();
+    pingTimer = setInterval(() => {
+      if (!conn || !conn.open) return;
+      sendData({ type: 'ping', ts: Date.now() });
+      // if no pong within 8s, flag connection as lost
+      pongTimer = setTimeout(() => {
+        pongTimer = null;
+        if (onConnectionLost) onConnectionLost();
+      }, 8000);
+    }, 5000);
+  }
+
+  function stopPing() {
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+  }
+
   function wireConn(c, onError, onClose, onOpen) {
     conn = c;
     conn.on('open', () => {
@@ -490,9 +515,20 @@ const FeltoraOnline = (() => {
         name:   window._feltoraLocalName   || 'Player',
         avatar: window._feltoraLocalAvatar || 'marlow',
       });
+      startPing();
       if (onOpen) onOpen();
     });
     conn.on('data', (msg) => {
+      if (msg.type === 'ping') {
+        sendData({ type: 'pong', ts: msg.ts });
+        return;
+      }
+      if (msg.type === 'pong') {
+        // pong received — connection alive, cancel the lost timer
+        if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
+        if (onConnectionRestored) onConnectionRestored();
+        return;
+      }
       if (msg.type === 'hello') {
         if (onPeerReady) onPeerReady(msg.name, msg.avatar);
       } else if (msg.type === 'voice-ready') {
@@ -502,11 +538,13 @@ const FeltoraOnline = (() => {
       }
     });
     conn.on('close', () => {
+      stopPing();
       if (onClose) onClose();
       else if (onPeerLeft) onPeerLeft();
     });
     conn.on('error', (e) => {
       console.warn('[online] conn error', e);
+      stopPing();
       if (onError) onError(e);
     });
   }
@@ -607,6 +645,8 @@ const FeltoraOnline = (() => {
     host, join,
     send: sendData,
     destroy: destroyPeer,
+    onConnectionLost(cb)     { onConnectionLost = cb; },
+    onConnectionRestored(cb) { onConnectionRestored = cb; },
     toggleMic, updateVoiceUI,
     markSpotFull,
     isHost()   { return role === 'host'; },

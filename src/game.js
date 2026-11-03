@@ -1919,6 +1919,16 @@ function startOnlineGame() {
   document.getElementById('voice-toggle-btn').hidden = false;
   window.FeltoraOnline.updateVoiceUI();
   if (onlineRole === 'host') sendOnlineState();
+  // graceful reconnect handling
+  window.FeltoraOnline.onConnectionLost(() => {
+    if (!onlineMode) return;
+    showReconnectBanner(true);
+  });
+  window.FeltoraOnline.onConnectionRestored(() => {
+    showReconnectBanner(false);
+    // host re-syncs state so guest catches up
+    if (onlineRole === 'host') sendOnlineState();
+  });
 }
 
 function restoreLocalOnlineIdentity() {
@@ -1928,6 +1938,30 @@ function restoreLocalOnlineIdentity() {
     updateAvatarDisplays();
   }
   onlineLocalPlayer = 0;
+}
+
+function showReconnectBanner(show) {
+  let banner = document.getElementById('reconnect-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'reconnect-banner';
+    banner.setAttribute('role', 'alert');
+    banner.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+      'background:rgba(10,14,12,0.96)', 'color:#f5c842',
+      'font:700 0.85rem/1 system-ui,sans-serif',
+      'text-align:center', 'padding:14px 16px',
+      'border-bottom:1px solid rgba(245,200,66,0.4)',
+      'backdrop-filter:blur(8px)',
+      'transition:transform 0.25s cubic-bezier(0.22,1,0.36,1)',
+      'transform:translateY(-100%)',
+    ].join(';');
+    banner.textContent = '⚠ Connection interrupted — reconnecting…';
+    document.body.prepend(banner);
+  }
+  requestAnimationFrame(() => {
+    banner.style.transform = show ? 'translateY(0)' : 'translateY(-100%)';
+  });
 }
 
 function handlePeerLeft() {
@@ -2222,6 +2256,10 @@ function frame(t) {
 document.addEventListener('visibilitychange', () => {
   last = null;
   acc = 0;
+  // when tab comes back, nudge the connection with a ping
+  if (!document.hidden && onlineMode && window.FeltoraOnline) {
+    window.FeltoraOnline.send({ type: 'ping', ts: Date.now() });
+  }
 });
 
 setCueStyle('wood');

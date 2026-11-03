@@ -1287,7 +1287,7 @@ function track(e) {
     if (Math.hypot(ptr.x - cue.x, ptr.y - cue.y) >= 2 * BR) {
       aim = Math.atan2(ptr.y - cue.y, ptr.x - cue.x);
     }
-    if (onlineMode && onlineRole === 'guest') {
+    if (onlineMode) {
       window.FeltoraOnline.send({ type: 'aim', angle: aim });
     }
   } else if (state === 'place') {
@@ -1960,9 +1960,8 @@ function sendOnlineState() {
     type: 'state',
     balls: balls.map((b) => ({ n: b.n, x: b.x, y: b.y, vx: b.vx, vy: b.vy, on: b.on })),
     state, turn, groups, groupBallNumbers, extraShots, msg, winner, turnRemaining,
-    // only send aim+power when it's the guest's turn so host aim stays hidden
-    aim:   turn === 1 ? aim  : undefined,
-    power: turn === 1 ? Number(document.getElementById('pw').value) : undefined
+    aim:   aim,
+    power: Number(document.getElementById('pw').value)
   });
 }
 
@@ -2020,9 +2019,9 @@ function handleOnlineMsg(msg_) {
     if (state === 'over' && !wasOver) showResults();
     return;
   }
-  if (msg_.type === 'aim' && onlineRole === 'host') {
-    // guest is aiming — update aim for rendering
-    if (state === 'aim' && turn === 1) aim = msg_.angle;
+  if (msg_.type === 'aim') {
+    if (onlineRole === 'host' && state === 'aim' && turn === 1) aim = msg_.angle;
+    if (onlineRole === 'guest' && state === 'aim' && turn === 0) aim = msg_.angle;
     return;
   }
   if (msg_.type === 'shoot' && onlineRole === 'host') {

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-2220">
+  <link rel="stylesheet" href="css/styles.css?v=20261103-2224">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%23101511'/><circle cx='16' cy='16' r='10' fill='%23161616'/><circle cx='16' cy='16' r='4' fill='white'/><text x='16' y='20' text-anchor='middle' font-size='9' font-weight='bold' fill='white' font-family='sans-serif'>8</text></svg>">
 </head>
 <body data-theme="dark">
@@ -331,9 +331,9 @@
           </section>
 
           <div class="settings-grid">
-            <div class="info-tile"><span class="tile-icon">♧</span><span><strong>Classic 8-ball</strong><small>Official rules &amp; physics</small></span></div>
+            <div class="info-tile"><span class="tile-icon">♧</span><span><strong>Classic 8-ball</strong><small>Feltora house rules; not WPA/APA rules</small></span></div>
             <div class="info-tile"><span class="tile-icon">⌖</span><span><strong>Power control</strong><small>Pull up the bar, release to shoot</small></span></div>
-            <div class="info-tile"><span class="tile-icon">⚑</span><span><strong>2-shot rule</strong><small>Foul = opponent gets 2 shots</small></span></div>
+            <div class="info-tile"><span class="tile-icon">⚑</span><span><strong>House-rule fouls</strong><small>Foul gives opponent 2 shots with cue-ball placement</small></span></div>
             <div class="info-tile"><span class="tile-icon">8</span><span><strong>Scratch on 8</strong><small>Pocket white with 8 = instant loss</small></span></div>
           </div>
         </main>
@@ -408,9 +408,23 @@
           <button class="ghost-btn sound-btn" id="music-toggle" type="button" data-music-toggle aria-pressed="false">♪ Off</button>
           <button class="ghost-btn voice-btn" id="voice-toggle-btn" type="button" hidden data-active="false" data-muted="true" aria-pressed="false">🎙 Mic</button>
           <button class="ghost-btn view-3d-btn" id="toggle-3d" type="button" aria-pressed="false" title="Toggle 3D view">3D</button>
+          <details class="game-tools">
+            <summary class="ghost-btn" aria-label="More game tools" title="More game tools">
+              <span aria-hidden="true">⋯</span><span class="game-tools-label">More</span>
+            </summary>
+            <div class="game-tools-menu">
+              <button class="game-tool-action" id="focus-view-btn" type="button" aria-pressed="false">
+                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg></span><span>Focus view</span>
+              </button>
+              <button class="game-tool-action" id="snapshot-btn" type="button">
+                <span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M7 5l1-2h8l1 2"/></svg></span><span>Save table image</span>
+              </button>
+            </div>
+          </details>
           <button class="ghost-btn" id="back-to-lobby" type="button">Leave</button>
         </div>
       </div>
+      <output class="game-feedback" id="game-feedback" aria-live="polite"></output>
 
     </section>
 
@@ -458,7 +472,7 @@
   <script src="src/auth.js?v=20261103-2205" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261103-2220" defer></script>
-  <script src="src/game.js?v=20261103-2220" defer></script>
+  <script src="src/game.js?v=20261103-2223" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

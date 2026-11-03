@@ -31,11 +31,15 @@ let balls, cue, state, turn, groups, aim, pocketed, msg, winner, ptr = { x: 230,
 let selectedCue = 'wood';
 let last = null, acc = 0;
 let lastOnlineStateAt = 0;
+let lastOnlineTurnSecond = 0;
 let aimPointerId = null, placePointerId = null, powerPointerId = null, powerPointerActive = false;
 let powerPullStart = null, powerStartingValue = 50, powerPullAxis = null;
 let botMode = false, botMascot = 'marlow', botDifficulty = 'medium', botTimer = null;
 let onlineMode = false;
 let onlineRole = null;
+let onlineLocalPlayer = 0;
+let remoteStateReceivedAt = 0;
+let remoteStateInterval = 1000 / 20;
 let view3d = false;
 let selectedFelt = 'green';
 let turnRemaining = 30;
@@ -508,6 +512,7 @@ function updatePowerReadout() {
 }
 
 function showResults() {
+  const localWon = winner === onlineLocalPlayer;
   const winnerName = playerNames[winner] || 'Player 1';
   document.getElementById('winner-name').textContent = winnerName;
   for (let i = 0; i < 2; i++) {
@@ -520,9 +525,9 @@ function showResults() {
     `${winnerName} wins the frame · ${playerNames[1 - winner]} loses`;
   document.getElementById('winner-summary').textContent = msg || `${winnerName} wins the frame.`;
   showScreen('results');
-  requestSound(winner === 0 ? 'victory' : 'defeat');
+  requestSound(localWon ? 'victory' : 'defeat');
   // confetti burst for winner
-  if (winner === 0) {
+  if (localWon) {
     const panel = document.getElementById('results-screen');
     const colors = ['#f2c230','#2b5fc4','#d6382f','#6b3fa0','#f08a24','#2e9b5a','#16d69a'];
     for (let i = 0; i < 28; i++) {
@@ -533,9 +538,9 @@ function showResults() {
       setTimeout(() => el.remove(), 2200);
     }
   }
-  // Record stats for the logged-in player (player 0 = local user).
+  // Record stats for the logged-in local player.
   if (window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
-    window.FeltoraAuth.recordResult(winner === 0);
+    window.FeltoraAuth.recordResult(localWon);
     const acc = window.FeltoraAuth.getAccount(window.FeltoraAuth.currentUser());
     if (acc) {
       document.getElementById('stat-wins').textContent   = acc.stats.wins;
@@ -744,6 +749,7 @@ function endShot() {
           ? 'The 8-ball was pocketed too early. Opponent wins.'
           : 'The 8-ball was not pocketed legally. Opponent wins.';
     ui();
+    if (onlineMode && onlineRole === 'host') sendOnlineState();
     showResults();
     return;
   }
@@ -805,6 +811,7 @@ function endShot() {
   turnRemaining = 30;
   setPower(50);
   ui();
+  if (onlineMode && onlineRole === 'host') sendOnlineState();
   scheduleBotTurn();
 }
 
@@ -1206,7 +1213,10 @@ function draw() {
     g.stroke();
   }
 
-  const renderAlpha = state === 'rolling' ? Math.min(1, acc / PHYSICS_STEP) : 1;
+  const renderAlpha = state !== 'rolling' ? 1
+    : onlineMode && onlineRole === 'guest' && remoteStateReceivedAt
+      ? Math.min(1, (performance.now() - remoteStateReceivedAt) / remoteStateInterval)
+      : Math.min(1, acc / PHYSICS_STEP);
   for (const b of balls) {
     if (!b.on) continue;
     const x = Number.isFinite(b.renderX) ? b.renderX + (b.x - b.renderX) * renderAlpha : b.x;
@@ -1361,6 +1371,7 @@ document.getElementById('back-to-lobby').addEventListener('click', () => {
   if (onlineMode) {
     window.FeltoraOnline.destroy();
     onlineMode = false;
+    restoreLocalOnlineIdentity();
     onlineRole = null;
     document.getElementById('voice-toggle-btn').hidden = true;
     updateLobbyForOnline(false);
@@ -1371,6 +1382,7 @@ document.getElementById('results-lobby').addEventListener('click', () => {
   if (onlineMode) {
     window.FeltoraOnline.destroy();
     onlineMode = false;
+    restoreLocalOnlineIdentity();
     onlineRole = null;
     document.getElementById('voice-toggle-btn').hidden = true;
     updateLobbyForOnline(false);
@@ -1383,6 +1395,7 @@ document.getElementById('rematch').addEventListener('click', () => {
       // host initiates rematch — send signal then start
       window.FeltoraOnline.send({ type: 'rematch' });
       newGame();
+      sendOnlineState();
     } else {
       // guest requests rematch — send signal, wait for host to start
       window.FeltoraOnline.send({ type: 'rematch-request' });
@@ -1400,6 +1413,59 @@ function adjustAim(direction) {
 
 document.getElementById('aim-left').addEventListener('click', () => adjustAim(-1));
 document.getElementById('aim-right').addEventListener('click', () => adjustAim(1));
+
+const gameTools = document.querySelector('.game-tools');
+const focusViewButton = document.getElementById('focus-view-btn');
+const gameFeedback = document.getElementById('game-feedback');
+let gameFeedbackTimer = 0;
+
+function announceGameAction(message) {
+  window.clearTimeout(gameFeedbackTimer);
+  gameFeedback.textContent = message;
+  gameFeedback.classList.add('visible');
+  gameFeedbackTimer = window.setTimeout(() => {
+    gameFeedback.classList.remove('visible');
+    gameFeedback.textContent = '';
+  }, 2400);
+}
+
+focusViewButton.addEventListener('click', () => {
+  const enabled = focusViewButton.getAttribute('aria-pressed') !== 'true';
+  document.getElementById('game-screen').classList.toggle('focus-layout', enabled);
+  focusViewButton.setAttribute('aria-pressed', String(enabled));
+  gameTools.open = false;
+});
+
+document.getElementById('snapshot-btn').addEventListener('click', () => {
+  try {
+    cv.toBlob((blob) => {
+      if (!blob) {
+        console.warn('Table snapshot could not be created.');
+        announceGameAction('Could not create the table image.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `feltora-table-${Date.now()}.png`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        announceGameAction('Table image download started.');
+      } catch (error) {
+        URL.revokeObjectURL(url);
+        console.warn('Table snapshot could not be downloaded.', error);
+        announceGameAction('Could not download the table image.');
+      }
+    }, 'image/png');
+  } catch (error) {
+    console.warn('Table snapshot could not be saved.', error);
+    announceGameAction('Could not save the table image.');
+  }
+  gameTools.open = false;
+});
 
 function updateProfileName(value) {
   const cleanName = value.trim().replace(/\s+/g, ' ').slice(0, 18);
@@ -1691,6 +1757,7 @@ document.getElementById('btn-create-room').addEventListener('click', () => {
       setOnlineSeat(peerName, peerAvatar);
       onlineMode = true;
       onlineRole = 'host';
+      onlineLocalPlayer = 0;
       botMode = false;
       playerNames[1] = peerName;
       playerAvatars[1] = peerAvatar;
@@ -1770,10 +1837,15 @@ document.getElementById('btn-join-room').addEventListener('click', () => {
       updateLobbyForOnline(true, code);
       onlineMode = true;
       onlineRole = 'guest';
+      onlineLocalPlayer = 1;
       botMode = false;
-      // from guest's perspective: they are player 0, host is player 1
-      playerNames[1]  = peerName;
-      playerAvatars[1] = peerAvatar;
+      const localName = playerNames[0];
+      const localAvatar = playerAvatars[0];
+      // Both screens use the host's authoritative player indexes.
+      playerNames[0] = peerName;
+      playerAvatars[0] = peerAvatar;
+      playerNames[1] = localName;
+      playerAvatars[1] = localAvatar;
       updateAvatarDisplays();
     },
     () => handlePeerLeft(),
@@ -1787,9 +1859,21 @@ document.getElementById('join-code-input').addEventListener('keydown', (e) => {
 
 function startOnlineGame() {
   stopSpotsPolling();
+  remoteStateReceivedAt = 0;
+  remoteStateInterval = 1000 / 20;
   newGame();
   document.getElementById('voice-toggle-btn').hidden = false;
   window.FeltoraOnline.updateVoiceUI();
+  if (onlineRole === 'host') sendOnlineState();
+}
+
+function restoreLocalOnlineIdentity() {
+  if (onlineLocalPlayer === 1) {
+    [playerNames[0], playerNames[1]] = [playerNames[1], playerNames[0]];
+    [playerAvatars[0], playerAvatars[1]] = [playerAvatars[1], playerAvatars[0]];
+    updateAvatarDisplays();
+  }
+  onlineLocalPlayer = 0;
 }
 
 function handlePeerLeft() {
@@ -1806,6 +1890,7 @@ function handlePeerLeft() {
     ui();
     showResults();
   } else {
+    restoreLocalOnlineIdentity();
     onlineMode = false;
     onlineRole = null;
     updateLobbyForOnline(false);
@@ -1814,14 +1899,13 @@ function handlePeerLeft() {
 }
 
 // ── Online game sync ─────────────────────────────────────────────
-// Host sends full ball state every frame during rolling, and turn events.
-// Guest sends aim + shoot commands. Host is authoritative.
+// The host simulates play and sends 20 Hz rolling snapshots plus turn changes.
 function sendOnlineState() {
   if (!onlineMode || onlineRole !== 'host') return;
   window.FeltoraOnline.send({
     type: 'state',
     balls: balls.map((b) => ({ n: b.n, x: b.x, y: b.y, vx: b.vx, vy: b.vy, on: b.on })),
-    state, turn, groups, groupBallNumbers, extraShots, msg,
+    state, turn, groups, groupBallNumbers, extraShots, msg, winner, turnRemaining,
     // only send aim+power when it's the guest's turn so host aim stays hidden
     aim:   turn === 1 ? aim  : undefined,
     power: turn === 1 ? Number(document.getElementById('pw').value) : undefined
@@ -1838,6 +1922,8 @@ function handleOnlineMsg(msg_) {
     const rematchBtn = document.getElementById('rematch');
     rematchBtn.textContent = 'Rematch';
     rematchBtn.disabled = false;
+    remoteStateReceivedAt = 0;
+    remoteStateInterval = 1000 / 20;
     newGame();
     return;
   }
@@ -1850,9 +1936,18 @@ function handleOnlineMsg(msg_) {
   }
   if (msg_.type === 'state' && onlineRole === 'guest') {
     // apply authoritative state from host
+    const wasOver = state === 'over';
+    const receivedAt = performance.now();
+    if (remoteStateReceivedAt) {
+      const interval = receivedAt - remoteStateReceivedAt;
+      if (interval > 0) remoteStateInterval = remoteStateInterval * 0.75 + interval * 0.25;
+    }
+    remoteStateReceivedAt = receivedAt;
     if (msg_.balls) {
       msg_.balls.forEach((bd, i) => {
         if (!balls[i]) return;
+        balls[i].renderX = balls[i].x;
+        balls[i].renderY = balls[i].y;
         Object.assign(balls[i], bd);
       });
     }
@@ -1862,9 +1957,12 @@ function handleOnlineMsg(msg_) {
     groupBallNumbers = msg_.groupBallNumbers;
     extraShots = msg_.extraShots;
     msg    = msg_.msg;
+    winner = msg_.winner;
+    if (Number.isFinite(msg_.turnRemaining)) turnRemaining = msg_.turnRemaining;
     if (msg_.aim !== undefined) aim = msg_.aim;
     if (msg_.power !== undefined) setPower(msg_.power);
     ui();
+    if (state === 'over' && !wasOver) showResults();
     return;
   }
   if (msg_.type === 'aim' && onlineRole === 'host') {
@@ -1892,6 +1990,7 @@ function handleOnlineMsg(msg_) {
         msg = '';
         turnRemaining = 30;
         ui();
+        sendOnlineState();
       }
     }
     return;
@@ -1995,7 +2094,9 @@ function loadPreferences() {
 function frame(t) {
   const dt = last === null ? 0 : Math.min(MAX_FRAME_DELTA, (t - last) / 1000);
   last = t;
-  if (document.getElementById('game-screen').classList.contains('active') && (state === 'aim' || state === 'place')) {
+  if (document.getElementById('game-screen').classList.contains('active')
+      && (state === 'aim' || state === 'place')
+      && (!onlineMode || onlineRole === 'host')) {
     const priorSecond = Math.ceil(turnRemaining);
     turnRemaining = Math.max(0, turnRemaining - dt);
     if (turnRemaining === 0) {
@@ -2020,13 +2121,14 @@ function frame(t) {
       aim = Math.atan2(250 - cue.y, 600 - cue.x);
       msg = 'Turn expired. Your turn.';
       ui();
+      if (onlineMode && onlineRole === 'host') sendOnlineState();
       scheduleBotTurn();
     } else if (Math.ceil(turnRemaining) !== priorSecond) {
       updatePlayerDisplay();
       updateStatusText();
     }
   }
-  if (state === 'rolling') {
+  if (state === 'rolling' && (!onlineMode || onlineRole === 'host')) {
     acc += dt;
     while (acc >= PHYSICS_STEP - 1e-10) {
       acc = Math.max(0, acc - PHYSICS_STEP);
@@ -2045,10 +2147,18 @@ function frame(t) {
     }
     if (balls.every((b) => !b.on || (b.vx === 0 && b.vy === 0))) endShot();
   }
+  if (onlineMode && onlineRole === 'guest'
+      && document.getElementById('game-screen').classList.contains('active')
+      && (state === 'aim' || state === 'place')) {
+    turnRemaining = Math.max(0, turnRemaining - dt);
+  }
   if (onlineMode && onlineRole === 'host' && (state === 'rolling' || state === 'aim' || state === 'place')) {
-    if (t - lastOnlineStateAt >= 1000 / 30) {
+    const rollingSnapshotDue = state === 'rolling' && t - lastOnlineStateAt >= 1000 / 20;
+    const timerSnapshotDue = state !== 'rolling' && Math.ceil(turnRemaining) !== lastOnlineTurnSecond;
+    if (rollingSnapshotDue || timerSnapshotDue) {
       sendOnlineState();
       lastOnlineStateAt = t;
+      lastOnlineTurnSecond = Math.ceil(turnRemaining);
     }
   }
   if (document.getElementById('game-screen').classList.contains('active')) draw();

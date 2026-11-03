@@ -356,10 +356,10 @@ function applyTheme(theme) {
 }
 
 function showScreen(screenName) {
-  if (screenName !== 'game' && state === 'bot') {
+  if (screenName !== 'game') {
     window.clearTimeout(botTimer);
     botTimer = null;
-    state = 'aim';
+    if (state === 'bot') state = 'aim';
   }
   document.getElementById('auth-screen').classList.toggle('active', screenName === 'auth');
   document.getElementById('lobby-screen').classList.toggle('active', screenName === 'lobby');
@@ -978,6 +978,7 @@ function scheduleBotTurn() {
   botTimer = window.setTimeout(() => {
     botTimer = null;
     if (!botMode || turn !== 1 || state !== 'bot') return;
+    if (!document.getElementById('game-screen').classList.contains('active')) return;
     if (needsPlacement) placeBotCueBall();
     const shot = chooseBotShot();
     aim = shot.angle;

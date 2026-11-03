@@ -59,7 +59,6 @@ const Auth = (() => {
         avatar: 'marlow',
         cue: 'wood',
         createdAt: Date.now(),
-        coins: 100,
         stats: { wins: 0, losses: 0, frames: 0 }
       };
       save(accounts);
@@ -100,24 +99,6 @@ const Auth = (() => {
       if (won) accounts[u].stats.wins++; else accounts[u].stats.losses++;
       save(accounts);
     },
-
-    /** Add coins to logged-in user's balance */
-    addCoins(amount) {
-      const u = session();
-      if (!u) return;
-      const accounts = load();
-      if (!accounts[u]) return;
-      accounts[u].coins = (accounts[u].coins || 0) + amount;
-      save(accounts);
-    },
-
-    /** Get coin balance for logged-in user, or null if not logged in */
-    getCoins() {
-      const u = session();
-      if (!u) return null;
-      const accounts = load();
-      return accounts[u] ? (accounts[u].coins || 0) : null;
-    }
   };
 })();
 

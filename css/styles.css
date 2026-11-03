@@ -1883,37 +1883,6 @@ h1 {
   gap: 8px;
 }
 
-/* ── Coin badge ────────────────────────────────────────────────── */
-.coin-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 8px;
-  background: linear-gradient(135deg, rgba(240,180,41,0.15), rgba(240,180,41,0.06));
-  border: 1px solid var(--gold-dim);
-  border-radius: var(--radius-pill);
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--gold);
-  cursor: default;
-  transition: border-color var(--t-base) var(--ease-out),
-              box-shadow var(--t-base) var(--ease-out);
-}
-.coin-badge:hover {
-  border-color: var(--gold);
-  box-shadow: var(--shadow-gold);
-}
-.coin-icon { font-size: 1rem; }
-
-/* ── Win coin animation ────────────────────────────────────────── */
-@keyframes coinPop {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.35); }
-  70%  { transform: scale(0.92); }
-  100% { transform: scale(1); }
-}
-.coin-badge.pop { animation: coinPop 0.45s var(--ease-spring); }
-
 /* ── Premium feature badge ─────────────────────────────────────── */
 .premium-badge {
   display: inline-flex;
@@ -2033,7 +2002,6 @@ h1 {
 
   /* settings grid 2-col on mobile */
   .settings-grid { grid-template-columns: repeat(2, 1fr); }
-
   /* avatar grid 4-col stays but smaller */
   .chip-grid.avatar-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
@@ -2060,23 +2028,6 @@ h1 {
   animation: pulse 2.4s ease infinite;
 }
 .online-count-label { color: var(--muted); font-weight: 500; }
-
-/* ── Coin earned toast (results screen) ────────────────────────── */
-.coin-earned-toast {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 10px 18px;
-  background: linear-gradient(135deg, rgba(240,180,41,0.18), rgba(240,180,41,0.06));
-  border: 1px solid var(--gold);
-  border-radius: var(--radius-pill);
-  color: var(--gold);
-  font-size: 0.88rem;
-  font-weight: 700;
-  animation: coinPop 0.5s var(--ease-spring) both;
-}
-.coin-earned-toast[hidden] { display: none; }
 
 /* ── Results screen mobile ─────────────────────────────────────── */
 @media (max-width: 540px) {

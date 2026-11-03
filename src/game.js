@@ -533,27 +533,15 @@ function showResults() {
       setTimeout(() => el.remove(), 2200);
     }
   }
-  // record result for logged-in player (player 0 = local user)
+  // Record stats for the logged-in player (player 0 = local user).
   if (window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
     window.FeltoraAuth.recordResult(winner === 0);
-    const earned = winner === 0 ? 50 : 10;
-    window.FeltoraAuth.addCoins(earned);
     const acc = window.FeltoraAuth.getAccount(window.FeltoraAuth.currentUser());
     if (acc) {
       document.getElementById('stat-wins').textContent   = acc.stats.wins;
       document.getElementById('stat-losses').textContent = acc.stats.losses;
       document.getElementById('stat-frames').textContent = acc.stats.frames;
-      refreshCoinBadge(acc.coins);
     }
-    const toast = document.getElementById('coin-earned-toast');
-    const toastText = document.getElementById('coin-earned-text');
-    if (toast && toastText) {
-      toastText.textContent = `+${earned} coins earned`;
-      toast.hidden = false;
-    }
-  } else {
-    const toast = document.getElementById('coin-earned-toast');
-    if (toast) toast.hidden = true;
   }
 }
 
@@ -2105,11 +2093,6 @@ function bootAuth() {
   }
 }
 
-function refreshCoinBadge(amount) {
-  const badge = document.getElementById('coin-badge');
-  if (badge) badge.textContent = `🪙 ${amount}`;
-}
-
 function applyAccountToLobby(username) {
   const acc = window.FeltoraAuth.getAccount(username);
   if (!acc) return;
@@ -2119,7 +2102,6 @@ function applyAccountToLobby(username) {
   document.getElementById('stat-wins').textContent   = acc.stats.wins;
   document.getElementById('stat-losses').textContent = acc.stats.losses;
   document.getElementById('stat-frames').textContent = acc.stats.frames;
-  refreshCoinBadge(acc.coins || 0);
   const savedName = acc.displayName || acc.username;
   document.getElementById('display-name').value = savedName;
   updateProfileName(savedName);
@@ -2202,7 +2184,6 @@ document.getElementById('reg-username').addEventListener('input', () => {
 
 document.getElementById('btn-guest').addEventListener('click', () => {
   document.getElementById('profile-account-tag').textContent = 'Guest';
-  refreshCoinBadge(0);
   showScreen('lobby');
 });
 

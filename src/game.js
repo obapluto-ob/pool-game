@@ -4,8 +4,9 @@ const W = 900, H = 500, L = 50, T = 50, R = 850, B = 450, BR = 10;
 const POCKETS = [[L, T, 22], [450, T - 4, 20], [R, T, 22], [L, B, 22], [450, B + 4, 20], [R, B, 22]];
 const BALL_BALL_RESTITUTION = 0.94;
 const CUSHION_RESTITUTION = 0.8;
-const ROLLING_DECELERATION = 0.22;
+const ROLLING_DECELERATION = 0.14;
 const PHYSICS_STEP = 1 / 60;
+const MAX_FRAME_DELTA = 0.25;
 const COL = ['', '#f2c230', '#2b5fc4', '#d6382f', '#6b3fa0', '#f08a24', '#2e9b5a', '#8b2a2a', '#161616'];
 const WHITE = '#f7f5ee';
 const cuePalettes = {
@@ -31,7 +32,7 @@ let selectedCue = 'wood';
 let last = null, acc = 0;
 let lastOnlineStateAt = 0;
 let aimPointerId = null, placePointerId = null, powerPointerId = null, powerPointerActive = false;
-let powerPullStart = null, powerStartingValue = 50;
+let powerPullStart = null, powerStartingValue = 50, powerPullAxis = null;
 let botMode = false, botMascot = 'marlow', botDifficulty = 'medium', botTimer = null;
 let onlineMode = false;
 let onlineRole = null;
@@ -429,7 +430,7 @@ function updateStatusText() {
       ? `Target: ${groups[turn] === 'solid' ? 'solids' : 'stripes'}.`
       : 'Open table: hit any numbered ball except the 8.';
     const powerInstruction = isHorizontalPowerBar()
-      ? 'drag right on the power control and release to shoot.'
+      ? 'drag right or pull up on the power control and release to shoot.'
       : 'pull up on the power control and release to shoot.';
     text = `${msg ? `${msg} ` : ''}${playerNames[turn]}’s turn · ${Math.ceil(turnRemaining)}s. ${target} Aim on the table, then ${powerInstruction}`;
   } else if (state === 'rolling') {
@@ -445,12 +446,12 @@ function updateStatusText() {
   powerBox.setAttribute(
     'aria-label',
     horizontalPowerBar
-      ? 'Shot power. Drag right to increase, release to shoot.'
+      ? 'Shot power. Drag right or pull up to increase, release to shoot.'
       : 'Shot power. Pull up to increase, release to shoot.'
   );
   powerBox.tabIndex = canShoot ? 0 : -1;
   document.getElementById('power-hint').textContent = canShoot
-    ? (horizontalPowerBar ? 'Drag →' : 'Pull up')
+    ? (horizontalPowerBar ? 'Drag → / ↑' : 'Pull up')
     : state === 'rolling'
       ? 'In motion'
       : state === 'bot'
@@ -612,6 +613,7 @@ function newGame(options = {}) {
   placePointerId = null;
   powerPointerId = null;
   powerPullStart = null;
+  powerPullAxis = null;
   powerPointerActive = false;
   document.getElementById('power-box').classList.remove('power-charging');
   ptr = { x: 230, y: 250 };
@@ -830,7 +832,7 @@ function shoot() {
     ui();
     return;
   }
-  const sp = 38 * (power / 100) ** 0.78;
+  const sp = 46 * (power / 100) ** 1.06;
   const group = groups[turn];
   eightBallReadyAtShot = !!group && !balls.some((b) => b.on && b.n !== 8 && b.n > 0 && grp(b.n) === group);
   firstHit = null;
@@ -857,12 +859,17 @@ function isHorizontalPowerBar() {
 
 function updatePulledPower(clientX, clientY) {
   if (powerPullStart === null) return;
-  if (isHorizontalPowerBar()) {
-    // drag right = more power
-    setPower(powerStartingValue + (clientX - powerPullStart) * 1.0);
+  const deltaX = clientX - powerPullStart.x;
+  const deltaY = clientY - powerPullStart.y;
+  if (powerPullAxis === null && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 4) {
+    powerPullAxis = isHorizontalPowerBar() && Math.abs(deltaX) >= Math.abs(deltaY) ? 'x' : 'y';
+  }
+  if (powerPullAxis === 'x') {
+    setPower(powerStartingValue + deltaX);
+  } else if (powerPullAxis === 'y') {
+    setPower(powerStartingValue - deltaY);
   } else {
-    // drag up = more power
-    setPower(powerStartingValue - (clientY - powerPullStart) * 1.0);
+    setPower(powerStartingValue);
   }
 }
 
@@ -1272,7 +1279,9 @@ function track(e) {
   if (state === 'aim') {
     if (e.pointerId !== aimPointerId) return;
     ptr = pos(e);
-    aim = Math.atan2(ptr.y - cue.y, ptr.x - cue.x);
+    if (Math.hypot(ptr.x - cue.x, ptr.y - cue.y) >= 2 * BR) {
+      aim = Math.atan2(ptr.y - cue.y, ptr.x - cue.x);
+    }
     if (onlineMode && onlineRole === 'guest') {
       window.FeltoraOnline.send({ type: 'aim', angle: aim });
     }
@@ -1299,6 +1308,7 @@ cv.addEventListener('pointerdown', (e) => {
 });
 cv.addEventListener('pointerup', (e) => {
   if (e.pointerId === aimPointerId) {
+    track(e);
     aimPointerId = null;
   }
   if (e.pointerId === placePointerId) {
@@ -1329,8 +1339,9 @@ powerBox.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   powerPointerActive = true;
   powerPointerId = event.pointerId;
-  powerPullStart = isHorizontalPowerBar() ? event.clientX : event.clientY;
+  powerPullStart = { x: event.clientX, y: event.clientY };
   powerStartingValue = Number(document.getElementById('pw').value);
+  powerPullAxis = null;
   powerBox.classList.add('power-charging');
   powerBox.setPointerCapture(event.pointerId);
 });
@@ -1345,6 +1356,7 @@ powerBox.addEventListener('pointerup', (event) => {
   powerPointerActive = false;
   powerPointerId = null;
   powerPullStart = null;
+  powerPullAxis = null;
   powerBox.classList.remove('power-charging');
   if (state === 'aim' && !(botMode && turn === 1)) shoot();
 });
@@ -1353,6 +1365,7 @@ powerBox.addEventListener('pointercancel', (event) => {
   powerPointerActive = false;
   powerPointerId = null;
   powerPullStart = null;
+  powerPullAxis = null;
   powerBox.classList.remove('power-charging');
 });
 
@@ -1966,7 +1979,7 @@ function loadPreferences() {
 }
 
 function frame(t) {
-  const dt = last === null ? 0 : (t - last) / 1000;
+  const dt = last === null ? 0 : Math.min(MAX_FRAME_DELTA, (t - last) / 1000);
   last = t;
   if (document.getElementById('game-screen').classList.contains('active') && (state === 'aim' || state === 'place')) {
     const priorSecond = Math.ceil(turnRemaining);
@@ -1979,6 +1992,7 @@ function frame(t) {
       placePointerId = null;
       powerPointerId = null;
       powerPullStart = null;
+      powerPullAxis = null;
       powerPointerActive = false;
       document.getElementById('power-box').classList.remove('power-charging');
       setPower(50);

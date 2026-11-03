@@ -957,7 +957,7 @@ h1 {
 
 .table-shell {
   grid-area: canvas;
-  width: min(100%, 900px, calc((100dvh - 290px) * 1.8));
+  width: min(100%, 900px, calc((100dvh - 250px) * 1.8));
   justify-self: center;
   border-radius: var(--radius-xl);
   border: 1px solid var(--line);
@@ -2316,9 +2316,11 @@ h1 {
   }
   .table-shell {
     grid-area: canvas;
-    width: 100%;
+    width: min(100%, calc((100dvh - 120px) * 1.8));
     max-height: calc(100dvh - 72px);
     border-radius: 8px;
+    justify-self: center;
+    align-self: center;
   }
   .power-box {
     grid-area: power;

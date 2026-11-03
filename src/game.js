@@ -2395,6 +2395,143 @@ document.getElementById('btn-signout').addEventListener('click', () => {
 bootAuth();
 requestAnimationFrame(frame);
 
+// ── Tutorial system ──────────────────────────────────────────
+const TUTORIAL_STEPS = [
+  {
+    icon: '🎱',
+    title: 'Welcome to FELTORA',
+    body: 'Classic 8-ball pool in your browser. Pocket all your balls (solids or stripes), then sink the 8-ball to win. First touch on the table assigns your group.',
+    spotlight: null,
+  },
+  {
+    icon: '🔮',
+    title: 'Aim your shot',
+    body: 'Drag anywhere on the table to rotate the cue. The dashed line shows where the cue ball will travel. Red line means an illegal hit — pick a different angle.',
+    spotlight: 'canvas',
+  },
+  {
+    icon: '⚡',
+    title: 'Set your power',
+    body: 'Pull up on the PWR bar (or drag right on portrait mobile) to charge your shot. Release to fire. The bar glows red at full power — use it wisely.',
+    spotlight: 'power-box',
+  },
+  {
+    icon: '🎯',
+    title: 'Fine-tune your aim',
+    body: 'Use the ◂ AIM ▸ buttons for precise angle adjustments. On desktop, arrow keys also work. Space bar fires the shot.',
+    spotlight: 'aim-controls-wrap',
+  },
+  {
+    icon: '📱',
+    title: 'Play anywhere',
+    body: 'FELTORA works on any device. Challenge a friend online with a 6-character room code, or sharpen your skills against the bot. Good luck!',
+    spotlight: null,
+  },
+];
+
+let tutStep = 0;
+let tutActive = false;
+
+function getTutSpotlightRect(key) {
+  if (!key) return null;
+  let el;
+  if (key === 'canvas') el = document.getElementById('c');
+  else if (key === 'power-box') el = document.getElementById('power-box');
+  else if (key === 'aim-controls-wrap') el = document.querySelector('.aim-controls');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { top: r.top - 8, left: r.left - 8, width: r.width + 16, height: r.height + 16 };
+}
+
+function renderTutStep() {
+  const step = TUTORIAL_STEPS[tutStep];
+  const overlay = document.getElementById('tutorial-overlay');
+  const card    = document.getElementById('tutorial-card');
+  const spotlight = document.getElementById('tutorial-spotlight');
+
+  document.getElementById('tutorial-icon').textContent  = step.icon;
+  document.getElementById('tutorial-title').textContent = step.title;
+  document.getElementById('tutorial-body').textContent  = step.body;
+  document.getElementById('tutorial-next').textContent  =
+    tutStep === TUTORIAL_STEPS.length - 1 ? 'Got it ✓' : 'Next →';
+
+  // step dots
+  const dots = document.getElementById('tutorial-step-indicator');
+  dots.innerHTML = TUTORIAL_STEPS.map((_, i) =>
+    `<span class="${i <= tutStep ? 'done' : ''}"></span>`
+  ).join('');
+
+  // spotlight
+  const rect = getTutSpotlightRect(step.spotlight);
+  if (rect) {
+    spotlight.style.cssText = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px;display:block;`;
+    // position card above or below spotlight
+    const cardH = 220;
+    const below = rect.top + rect.height + 16;
+    const above = rect.top - cardH - 16;
+    card.style.top = below + cardH < window.innerHeight ? `${below}px` : `${Math.max(16, above)}px`;
+  } else {
+    spotlight.style.display = 'none';
+    card.style.top = '50%';
+    card.style.transform = 'translateX(-50%) translateY(-50%)';
+  }
+  if (rect) card.style.transform = 'translateX(-50%)';
+}
+
+function startTutorial(force = false) {
+  try {
+    if (!force && localStorage.getItem('feltora-tutorial-done')) return;
+  } catch {}
+  // only show in-game steps when game screen is active, else show intro steps
+  const onGame = document.getElementById('game-screen').classList.contains('active');
+  if (!onGame && !force) return;
+  tutStep = 0;
+  tutActive = true;
+  const overlay = document.getElementById('tutorial-overlay');
+  overlay.style.display = 'block';
+  overlay.classList.add('active');
+  renderTutStep();
+}
+
+function closeTutorial() {
+  tutActive = false;
+  const overlay = document.getElementById('tutorial-overlay');
+  overlay.style.display = 'none';
+  overlay.classList.remove('active');
+  try { localStorage.setItem('feltora-tutorial-done', '1'); } catch {}
+}
+
+document.getElementById('tutorial-next').addEventListener('click', () => {
+  if (tutStep < TUTORIAL_STEPS.length - 1) {
+    tutStep++;
+    renderTutStep();
+  } else {
+    closeTutorial();
+  }
+});
+
+document.getElementById('tutorial-skip').addEventListener('click', closeTutorial);
+
+document.getElementById('tutorial-backdrop').addEventListener('click', closeTutorial);
+
+document.getElementById('how-to-play-btn').addEventListener('click', () => {
+  // if game is not active, start a bot game first so spotlight targets exist
+  if (!document.getElementById('game-screen').classList.contains('active')) {
+    startTutorial(true);
+  } else {
+    startTutorial(true);
+  }
+});
+
+// auto-show for first-time users after they enter the game screen
+const _origShowScreen = showScreen;
+function showScreen(name) {
+  _origShowScreen(name);
+  if (name === 'game') {
+    setTimeout(() => startTutorial(false), 800);
+  }
+}
+
 // ── Presence (online count) ──────────────────────────────────────
 function updateOnlineCountBadge(n) {
   const el = document.getElementById('online-count-num');

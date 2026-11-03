@@ -768,6 +768,7 @@ function endShot() {
     const oppGroup = groups[1 - me];
     const oppBall = balls.find((b) => b.on && grp(b.n) === oppGroup);
     if (oppBall) groupBallNumbers[1 - me] = oppBall.n;
+    announceGameAction(`🎱 ${playerNames[me]}: ${groups[me] === 'solid' ? 'Solids' : 'Stripes'} — ${playerNames[1 - me]}: ${groups[1 - me] === 'solid' ? 'Solids' : 'Stripes'}`, 3500);
   } else if (!foul && groups[me] && groupBallNumbers[me] === null) {
     groupBallNumbers[me] = obj.find((n) => grp(n) === groups[me]) ?? null;
   }
@@ -785,6 +786,7 @@ function endShot() {
       : firstHit === null
         ? 'Foul: cue ball missed everything. Opponent gets 2 shots.'
         : 'Foul: wrong group hit first. Opponent gets 2 shots.';
+    announceGameAction('⚠ ' + msg, 4500);
   } else if (own) {
     // potted own ball — consume one extra shot if active, keep turn
     if (extraShots > 0) extraShots--;
@@ -1434,14 +1436,14 @@ const focusViewButton = document.getElementById('focus-view-btn');
 const gameFeedback = document.getElementById('game-feedback');
 let gameFeedbackTimer = 0;
 
-function announceGameAction(message) {
+function announceGameAction(message, duration = 2400) {
   window.clearTimeout(gameFeedbackTimer);
   gameFeedback.textContent = message;
   gameFeedback.classList.add('visible');
   gameFeedbackTimer = window.setTimeout(() => {
     gameFeedback.classList.remove('visible');
     gameFeedback.textContent = '';
-  }, 2400);
+  }, duration);
 }
 
 focusViewButton.addEventListener('click', () => {

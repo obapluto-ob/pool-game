@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261103-0850">
+  <link rel="stylesheet" href="css/styles.css?v=20261103-1845">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%23101511'/><circle cx='16' cy='16' r='10' fill='%23161616'/><circle cx='16' cy='16' r='4' fill='white'/><text x='16' y='20' text-anchor='middle' font-size='9' font-weight='bold' fill='white' font-family='sans-serif'>8</text></svg>">
 </head>
 <body data-theme="dark">
@@ -111,11 +111,42 @@
             </div>
           </div>
 
-          <div class="stack">
+          <nav class="profile-tabs" role="tablist" aria-label="Profile settings">
+            <button class="profile-tab active" id="profile-tab-account" type="button" role="tab" aria-selected="true" aria-controls="profile-pane-account" data-profile-tab="account">Profile</button>
+            <button class="profile-tab" id="profile-tab-style" type="button" role="tab" aria-selected="false" aria-controls="profile-pane-style" data-profile-tab="style" tabindex="-1">Style</button>
+            <button class="profile-tab" id="profile-tab-sound" type="button" role="tab" aria-selected="false" aria-controls="profile-pane-sound" data-profile-tab="sound" tabindex="-1">Sound</button>
+          </nav>
+
+          <section class="profile-pane" id="profile-pane-account" role="tabpanel" aria-labelledby="profile-tab-account" data-profile-pane="account">
             <label class="profile-name-field" for="display-name">
               <span class="mini-label">Display name</span>
               <input id="display-name" type="text" maxlength="18" autocomplete="nickname" value="Player One">
             </label>
+            <details class="profile-options">
+              <summary>Choose avatar</summary>
+              <div class="chip-grid avatar-grid" aria-label="Choose a FELTORA mascot">
+                <button class="chip-btn avatar-choice active" type="button" data-avatar="marlow" aria-pressed="true"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Marlow</span><span class="avatar-choice-role">Host</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="ivy" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Ivy</span><span class="avatar-choice-role">Tactician</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="rook" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Rook</span><span class="avatar-choice-role">Veteran</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="pip" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Pip</span><span class="avatar-choice-role">Trick shot</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="zara" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Zara</span><span class="avatar-choice-role">Hustler</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="knox" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Knox</span><span class="avatar-choice-role">Enforcer</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="lena" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Lena</span><span class="avatar-choice-role">Sharpshooter</span></button>
+                <button class="chip-btn avatar-choice" type="button" data-avatar="dex" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Dex</span><span class="avatar-choice-role">Wildcard</span></button>
+              </div>
+            </details>
+            <div class="profile-stats" id="profile-stats" hidden>
+              <div class="mini-label">Your stats</div>
+              <div class="stats-row">
+                <div class="stat-chip"><strong id="stat-wins">0</strong><span>Wins</span></div>
+                <div class="stat-chip"><strong id="stat-losses">0</strong><span>Losses</span></div>
+                <div class="stat-chip"><strong id="stat-frames">0</strong><span>Frames</span></div>
+              </div>
+            </div>
+            <button class="auth-signout-btn" id="btn-signout" type="button" hidden>Sign out</button>
+          </section>
+
+          <section class="profile-pane" id="profile-pane-style" role="tabpanel" aria-labelledby="profile-tab-style" data-profile-pane="style" hidden>
             <div>
               <div class="mini-label">Cue finish</div>
               <div class="chip-grid" aria-label="Cue finish selector">
@@ -127,22 +158,6 @@
                 <button class="chip-btn" type="button" data-cue="crimson">Crimson</button>
               </div>
             </div>
-
-            <div>
-              <div class="mini-label">Avatar</div>
-              <div class="chip-grid avatar-grid" aria-label="Choose a FELTORA mascot">
-                <button class="chip-btn avatar-choice active" type="button" data-avatar="marlow" aria-pressed="true"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Marlow</span><span class="avatar-choice-role">Host</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="ivy" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Ivy</span><span class="avatar-choice-role">Tactician</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="rook" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Rook</span><span class="avatar-choice-role">Veteran</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="pip" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Pip</span><span class="avatar-choice-role">Trick shot</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="zara" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Zara</span><span class="avatar-choice-role">Hustler</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="knox" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Knox</span><span class="avatar-choice-role">Enforcer</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="lena" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Lena</span><span class="avatar-choice-role">Sharpshooter</span></button>
-                <button class="chip-btn avatar-choice" type="button" data-avatar="dex" aria-pressed="false"><span class="avatar-choice-art"></span><span class="avatar-choice-name">Dex</span><span class="avatar-choice-role">Wildcard</span></button>
-              </div>
-            </div>
-          </div>
-
             <div>
               <div class="mini-label">Table felt</div>
               <div class="chip-grid" aria-label="Table felt colour">
@@ -153,19 +168,11 @@
                 <button class="chip-btn" type="button" data-felt="sand">Sand</button>
               </div>
             </div>
-          <div class="profile-stats" id="profile-stats" hidden>
-            <div class="mini-label">Your stats</div>
-            <div class="stats-row">
-              <div class="stat-chip"><strong id="stat-wins">0</strong><span>Wins</span></div>
-              <div class="stat-chip"><strong id="stat-losses">0</strong><span>Losses</span></div>
-              <div class="stat-chip"><strong id="stat-frames">0</strong><span>Frames</span></div>
-            </div>
-          </div>
+          </section>
 
-          <button class="auth-signout-btn" id="btn-signout" type="button" hidden>Sign out</button>
-
-          <details class="audio-settings">
-            <summary>Sound &amp; atmosphere</summary>
+          <section class="profile-pane" id="profile-pane-sound" role="tabpanel" aria-labelledby="profile-tab-sound" data-profile-pane="sound" hidden>
+            <div class="audio-settings">
+              <div class="mini-label">Sound &amp; atmosphere</div>
             <label class="audio-setting" for="music-volume">
               <span>Lounging music <output id="music-volume-value">18%</output></span>
               <input type="range" id="music-volume" min="0" max="100" value="18">
@@ -179,7 +186,8 @@
               <span>Mute all sound</span>
             </label>
             <p class="audio-note">Audio begins after your first interaction.</p>
-          </details>
+            </div>
+          </section>
         </aside>
 
         <main class="lobby-main panel">
@@ -458,7 +466,7 @@
   <script src="src/auth.js?v=20261103-0850" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261103-0850" defer></script>
-  <script src="src/game.js?v=20261103-0850" defer></script>
+  <script src="src/game.js?v=20261103-1845" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

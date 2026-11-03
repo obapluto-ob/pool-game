@@ -1434,6 +1434,35 @@ displayNameInput.addEventListener('input', () => {
   if (cleaned) updateProfileName(cleaned);
 });
 
+const profileTabs = [...document.querySelectorAll('[data-profile-tab]')];
+const activateProfileTab = (tab, focus = false) => {
+  const selectedTab = tab.dataset.profileTab;
+  profileTabs.forEach((item) => {
+    const selected = item === tab;
+    item.classList.toggle('active', selected);
+    item.setAttribute('aria-selected', String(selected));
+    item.tabIndex = selected ? 0 : -1;
+  });
+  document.querySelectorAll('[data-profile-pane]').forEach((pane) => {
+    pane.hidden = pane.dataset.profilePane !== selectedTab;
+  });
+  if (focus) tab.focus();
+};
+
+profileTabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => activateProfileTab(tab));
+  tab.addEventListener('keydown', (event) => {
+    let nextIndex;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % profileTabs.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + profileTabs.length) % profileTabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = profileTabs.length - 1;
+    else return;
+    event.preventDefault();
+    activateProfileTab(profileTabs[nextIndex], true);
+  });
+});
+
 document.getElementById('theme-toggle').addEventListener('click', () => {
   const current = document.body.dataset.theme === 'dark' ? 'dark' : 'light';
   applyTheme(current === 'dark' ? 'light' : 'dark');

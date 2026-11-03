@@ -198,6 +198,67 @@ img, svg { display: block; }
   gap: 16px;
 }
 
+.profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel-soft);
+}
+
+.profile-tab {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: color var(--t-base), background var(--t-base), box-shadow var(--t-base);
+}
+
+.profile-tab:hover { color: var(--text); }
+.profile-tab.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+.profile-pane {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.profile-pane[hidden] { display: none; }
+
+.profile-options {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-soft);
+}
+
+.profile-options summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  list-style: none;
+}
+
+.profile-options summary::-webkit-details-marker { display: none; }
+.profile-options summary::after {
+  content: '+';
+  float: right;
+  color: var(--accent);
+  font-size: 1rem;
+  line-height: 1;
+}
+.profile-options[open] summary::after { content: '−'; }
+.profile-options .avatar-grid { margin-top: 12px; }
+
 .title-row {
   display: flex;
   align-items: center;
@@ -398,23 +459,6 @@ img, svg { display: block; }
   border-radius: var(--radius-md);
   background: var(--panel-soft);
 }
-.audio-settings summary {
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  user-select: none;
-}
-.audio-settings summary::before {
-  content: '▸';
-  font-size: 0.6rem;
-  transition: transform var(--t-base);
-}
-.audio-settings[open] summary::before { transform: rotate(90deg); }
 .audio-setting {
   display: grid;
   gap: 5px;
@@ -1530,6 +1574,7 @@ button:disabled {
 
 /* ── Profile stats ─────────────────────────────────────────────── */
 .profile-stats { display: grid; gap: 8px; }
+.profile-stats[hidden] { display: none; }
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .stat-chip {
   display: grid;

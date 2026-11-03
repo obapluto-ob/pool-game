@@ -382,6 +382,7 @@
         <div class="table-shell">
           <canvas id="c" width="900" height="500" aria-label="Pool table"></canvas>
         </div>
+        <p class="status-line" id="status" aria-live="polite">Player 1's turn</p>
         <div class="power-box" id="power-box" role="slider" tabindex="0"
              aria-label="Shot power. Pull up to increase, release to shoot."
              aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
@@ -407,7 +408,6 @@
         </div>
       </div>
 
-      <p class="status-line" id="status" aria-live="polite">Player 1's turn</p>
     </section>
 
     <!-- ── RESULTS SCREEN ─────────────────────────────────────── -->
@@ -451,14 +451,6 @@
         </div>
       </div>
     </section>
-
-    <!-- ── LANDSCAPE HINT ──────────────────────────────────── -->
-    <div class="landscape-hint" id="landscape-hint" aria-hidden="true" role="status" aria-live="polite">
-      <div class="landscape-hint-inner">
-        <div class="landscape-hint-icon">⟳</div>
-        <p>Return your phone to portrait to continue.</p>
-      </div>
-    </div>
 
   </div>
 

@@ -25,6 +25,7 @@ let groupBallNumbers = [null, null];
 let balls, cue, state, turn, groups, aim, pocketed, msg, winner, ptr = { x: 230, y: 250 };
 let selectedCue = 'wood';
 let last = 0, acc = 0;
+let lastOnlineStateAt = 0;
 let aimPointerId = null, placePointerId = null, powerPointerId = null, powerPointerActive = false;
 let powerPullStart = null, powerStartingValue = 50;
 let botMode = false, botMascot = 'marlow', botDifficulty = 'medium', botTimer = null;
@@ -342,29 +343,6 @@ function applyTheme(theme) {
   document.documentElement.style.setProperty('color-scheme', next === 'dark' ? 'dark' : 'light');
 }
 
-function updateLandscapeHint() {
-  const hint = document.getElementById('landscape-hint');
-  if (!hint) return;
-  const gameActive = document.getElementById('game-screen').classList.contains('active');
-  const blockedOrientation = window.matchMedia(
-    '(max-width: 900px) and (max-height: 600px) and (orientation: landscape)'
-  ).matches;
-  hint.classList.toggle('game-active', gameActive);
-  hint.setAttribute('aria-hidden', String(!gameActive || !blockedOrientation));
-  if (gameActive && blockedOrientation) {
-    aimPointerId = null;
-    placePointerId = null;
-    powerPointerId = null;
-    powerPullStart = null;
-    powerPointerActive = false;
-    document.getElementById('power-box').classList.remove('power-charging');
-  }
-  if (gameActive) updateStatusText();
-}
-
-window.addEventListener('resize', updateLandscapeHint);
-window.addEventListener('orientationchange', updateLandscapeHint);
-
 function showScreen(screenName) {
   if (screenName !== 'game' && state === 'bot') {
     window.clearTimeout(botTimer);
@@ -375,7 +353,6 @@ function showScreen(screenName) {
   document.getElementById('lobby-screen').classList.toggle('active', screenName === 'lobby');
   document.getElementById('game-screen').classList.toggle('active', screenName === 'game');
   document.getElementById('results-screen').classList.toggle('active', screenName === 'results');
-  updateLandscapeHint();
 }
 
 function updatePlayerDisplay() {
@@ -673,10 +650,10 @@ function physics() {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const d2 = dx * dx + dy * dy;
-        if (d2 >= 4 * BR * BR || d2 === 0) continue;
+        if (d2 >= 4 * BR * BR) continue;
         const d = Math.sqrt(d2);
-        const nx = dx / d;
-        const ny = dy / d;
+        const nx = d > 1e-8 ? dx / d : 1;
+        const ny = d > 1e-8 ? dy / d : 0;
         const ov = (2 * BR - d) / 2;
         a.x -= nx * ov;
         a.y -= ny * ov;
@@ -754,7 +731,6 @@ function endShot() {
     // check if all own group balls are now gone (including ones pocketed this shot)
     const left = mine ? balls.some((b) => b.on && b.n > 0 && b.n !== 8 && grp(b.n) === mine) : true;
     // also count balls pocketed THIS shot — if they cleared their last ball and 8 in same shot, that's legal
-    const clearedThisShot = mine ? !p.filter((n) => n > 0 && n !== 8 && grp(n) === mine).length === 0 || !left : false;
     const readyNow = eightBallReadyAtShot || (!left && !!mine);
     const win = !!mine && !left && !foul && readyNow;
     winner = win ? me : 1 - me;
@@ -834,7 +810,7 @@ function endShot() {
 }
 
 function shoot() {
-  if (state !== 'aim' || isMobileLandscape()) return;
+  if (state !== 'aim') return;
   if (onlineMode && onlineRole === 'guest') {
     window.FeltoraOnline.send({ type: 'shoot', angle: aim, power: Number(document.getElementById('pw').value) });
     return;
@@ -863,12 +839,6 @@ function shoot() {
 function isHorizontalPowerBar() {
   // portrait mobile uses horizontal bar
   return window.matchMedia('(max-width: 680px) and (orientation: portrait)').matches;
-}
-
-function isMobileLandscape() {
-  return window.matchMedia(
-    '(max-width: 900px) and (max-height: 600px) and (orientation: landscape)'
-  ).matches;
 }
 
 function updatePulledPower(clientX, clientY) {
@@ -1268,7 +1238,6 @@ function pos(e) {
 }
 
 function track(e) {
-  if (isMobileLandscape()) return;
   if (!document.getElementById('game-screen').classList.contains('active')) return;
   if (state !== 'aim' && state !== 'place') return;
   if (botMode && turn === 1) return;
@@ -1329,7 +1298,7 @@ cv.addEventListener('pointercancel', (e) => {
 
 const powerBox = document.getElementById('power-box');
 powerBox.addEventListener('pointerdown', (event) => {
-  if (isMobileLandscape() || state !== 'aim' || (botMode && turn === 1)) return;
+  if (state !== 'aim' || (botMode && turn === 1)) return;
   event.preventDefault();
   powerPointerActive = true;
   powerPointerId = event.pointerId;
@@ -1365,6 +1334,7 @@ document.getElementById('back-to-lobby').addEventListener('click', () => {
     window.FeltoraOnline.destroy();
     onlineMode = false;
     onlineRole = null;
+    document.getElementById('voice-toggle-btn').hidden = true;
     updateLobbyForOnline(false);
   }
   showScreen('lobby');
@@ -1396,7 +1366,7 @@ document.getElementById('rematch').addEventListener('click', () => {
   }
 });
 function adjustAim(direction) {
-  if (isMobileLandscape() || state !== 'aim') return;
+  if (state !== 'aim') return;
   aim += direction * 0.04;
 }
 
@@ -1429,7 +1399,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   applyTheme(current === 'dark' ? 'light' : 'dark');
 });
 powerBox.addEventListener('keydown', (event) => {
-  if (isMobileLandscape() || state !== 'aim' || (botMode && turn === 1)) return;
+  if (state !== 'aim' || (botMode && turn === 1)) return;
   if (['ArrowLeft', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
     setPower(Number(document.getElementById('pw').value) - 5);
@@ -1895,7 +1865,6 @@ function setProfileAvatar(avatar) {
 
 window.addEventListener('keydown', (e) => {
   if (e.target === powerBox) return;
-  if (isMobileLandscape()) return;
   if (e.code === 'Space' && document.getElementById('game-screen').classList.contains('active')) {
     e.preventDefault();
     shoot();
@@ -2018,7 +1987,10 @@ function frame(t) {
     if (balls.every((b) => !b.on || (b.vx === 0 && b.vy === 0))) endShot();
   }
   if (onlineMode && onlineRole === 'host' && (state === 'rolling' || state === 'aim' || state === 'place')) {
-    sendOnlineState();
+    if (t - lastOnlineStateAt >= 1000 / 30) {
+      sendOnlineState();
+      lastOnlineStateAt = t;
+    }
   }
   if (document.getElementById('game-screen').classList.contains('active')) draw();
   requestAnimationFrame(frame);

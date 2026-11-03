@@ -135,8 +135,21 @@ function setFelt(felt) {
 function toggle3D() {
   view3d = !view3d;
   const shell = document.querySelector('.table-shell');
+  const btn   = document.getElementById('toggle-3d');
+  if (view3d) {
+    shell.style.transition = 'transform 0.55s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.55s ease, filter 0.55s ease';
+    shell.style.transform  = 'perspective(1000px) rotateX(28deg) rotateY(-2deg) scale(1.04)';
+    shell.style.boxShadow  = '0 40px 80px rgba(0,0,0,0.75), 0 20px 40px rgba(0,0,0,0.5), 0 0 0 2px rgba(245,200,66,0.3)';
+    shell.style.filter     = 'drop-shadow(0 20px 28px rgba(0,0,0,0.55))';
+    shell.style.borderRadius = '14px';
+  } else {
+    shell.style.transition = 'transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s ease, filter 0.4s ease';
+    shell.style.transform  = '';
+    shell.style.boxShadow  = '';
+    shell.style.filter     = '';
+    shell.style.borderRadius = '';
+  }
   shell.classList.toggle('view-3d', view3d);
-  const btn = document.getElementById('toggle-3d');
   btn.setAttribute('aria-pressed', String(view3d));
   btn.classList.toggle('active', view3d);
 }
@@ -377,6 +390,7 @@ function showScreen(screenName) {
   document.getElementById('lobby-screen').classList.toggle('active', screenName === 'lobby');
   document.getElementById('game-screen').classList.toggle('active', screenName === 'game');
   document.getElementById('results-screen').classList.toggle('active', screenName === 'results');
+  document.getElementById('community-screen').classList.toggle('active', screenName === 'community');
   if (screenName === 'game' || screenName === 'lobby') {
     setTimeout(() => typeof startTutorial === 'function' && startTutorial(false), 900);
   }
@@ -570,6 +584,10 @@ function showResults() {
       document.getElementById('stat-frames').textContent = acc.stats.frames;
     }
   }
+
+  // show share/save button only for winner
+  const shareBtn = document.getElementById('btn-share-win');
+  if (shareBtn) shareBtn.hidden = !localWon;
 }
 
 function ui() {
@@ -1181,45 +1199,80 @@ function draw() {
   if (state === 'aim' && (!onlineMode || turn === localTurn)) {
     const palette = cuePalettes[selectedCue] || cuePalettes.wood;
     const r = ray();
-    // Determine if the first ball we'd hit is a legal target
     const myGroup = groups[turn];
-    // recalculate 8-ball readiness live for the aim line (eightBallReadyAtShot is only set at shoot time)
     const liveEightReady = !!myGroup && !balls.some((b) => b.on && b.n !== 8 && b.n > 0 && grp(b.n) === myGroup);
     const hitIsLegal = !r.hit || (
       myGroup
         ? grp(r.hit.n) === myGroup || (r.hit.n === 8 && liveEightReady)
         : r.hit.n !== 8
     );
-    const lineColor = hitIsLegal ? 'rgba(255,255,255,.7)' : 'rgba(255,90,70,.65)';
+
+    // ── Ghost line: cue ball travel path ──────────────────────────
+    const ghostX = cue.x + r.dx * r.t;
+    const ghostY = cue.y + r.dy * r.t;
+    const legalColor   = 'rgba(255,255,255,0.55)';
+    const illegalColor = 'rgba(255,90,70,0.60)';
+    const lineColor = hitIsLegal ? legalColor : illegalColor;
+
     g.save();
-    g.setLineDash([6, 6]);
+    // dashed travel line from cue ball to ghost position
+    g.setLineDash([5, 7]);
     g.strokeStyle = lineColor;
-    g.lineWidth = 1.5;
+    g.lineWidth = 1.4;
+    g.lineCap = 'round';
     g.beginPath();
     g.moveTo(cue.x, cue.y);
-    g.lineTo(cue.x + r.dx * r.t, cue.y + r.dy * r.t);
+    g.lineTo(ghostX, ghostY);
     g.stroke();
     g.setLineDash([]);
-    const gx = cue.x + r.dx * r.t;
-    const gy = cue.y + r.dy * r.t;
+
+    // ghost cue ball circle at impact point
+    g.strokeStyle = lineColor;
+    g.lineWidth = 1.5;
+    g.globalAlpha = 0.55;
     g.beginPath();
-    g.arc(gx, gy, BR, 0, 7);
+    g.arc(ghostX, ghostY, BR, 0, Math.PI * 2);
     g.stroke();
-    if (r.hit && hitIsLegal) {
-      const hx = r.hit.x - gx;
-      const hy = r.hit.y - gy;
+    // faint fill so ghost ball reads clearly
+    g.fillStyle = hitIsLegal ? 'rgba(255,255,255,0.08)' : 'rgba(255,90,70,0.10)';
+    g.fill();
+    g.globalAlpha = 1;
+
+    // ── Deflection line: where the object ball goes after impact ──
+    if (r.hit) {
+      const hx = r.hit.x - ghostX;
+      const hy = r.hit.y - ghostY;
       const hl = Math.hypot(hx, hy) || 1;
+      const deflectLen = 60;
+      const deflectColor = hitIsLegal ? 'rgba(0,240,168,0.55)' : 'rgba(255,90,70,0.45)';
+      g.setLineDash([4, 6]);
+      g.strokeStyle = deflectColor;
+      g.lineWidth = 1.3;
       g.beginPath();
       g.moveTo(r.hit.x, r.hit.y);
-      g.lineTo(r.hit.x + hx / hl * 45, r.hit.y + hy / hl * 45);
+      g.lineTo(r.hit.x + hx / hl * deflectLen, r.hit.y + hy / hl * deflectLen);
       g.stroke();
+      g.setLineDash([]);
+      // small arrowhead at end of deflection line
+      const ex = r.hit.x + hx / hl * deflectLen;
+      const ey = r.hit.y + hy / hl * deflectLen;
+      const ang = Math.atan2(hy, hx);
+      g.fillStyle = deflectColor;
+      g.beginPath();
+      g.moveTo(ex, ey);
+      g.lineTo(ex - Math.cos(ang - 0.4) * 7, ey - Math.sin(ang - 0.4) * 7);
+      g.lineTo(ex - Math.cos(ang + 0.4) * 7, ey - Math.sin(ang + 0.4) * 7);
+      g.closePath();
+      g.fill();
     }
     g.restore();
 
+    // ── Cue stick ─────────────────────────────────────────────────
     const pw = Number(document.getElementById('pw').value) / 100;
     const back = 16 + pw * 55;
     const sx = cue.x - Math.cos(aim) * back;
     const sy = cue.y - Math.sin(aim) * back;
+    g.save();
     g.shadowColor = palette.glow;
     g.shadowBlur = 8;
     g.strokeStyle = palette.main;
@@ -1236,6 +1289,7 @@ function draw() {
     g.moveTo(sx - Math.cos(aim) * 170, sy - Math.sin(aim) * 170);
     g.lineTo(sx - Math.cos(aim) * 230, sy - Math.sin(aim) * 230);
     g.stroke();
+    g.restore();
   }
 
   const renderAlpha = state !== 'rolling' ? 1
@@ -2439,6 +2493,102 @@ document.getElementById('btn-signout').addEventListener('click', () => {
 
 bootAuth();
 requestAnimationFrame(frame);
+
+// ── Win card screenshot ─────────────────────────────────────────
+async function saveWinCard() {
+  const winnerName = playerNames[winner] || 'Player';
+  const loserName  = playerNames[1 - winner] || 'Opponent';
+  const W2 = 640, H2 = 360;
+  const oc = document.createElement('canvas');
+  oc.width  = W2 * 2; // 2x for sharpness
+  oc.height = H2 * 2;
+  const ctx = oc.getContext('2d');
+  ctx.scale(2, 2);
+
+  // background
+  const bg = ctx.createLinearGradient(0, 0, W2, H2);
+  bg.addColorStop(0,   '#050a08');
+  bg.addColorStop(0.5, '#0d1a12');
+  bg.addColorStop(1,   '#050a08');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W2, H2);
+
+  // felt texture strip
+  const felt = ctx.createLinearGradient(0, H2 * 0.28, 0, H2 * 0.72);
+  felt.addColorStop(0,   '#1e6038');
+  felt.addColorStop(0.5, '#155e3a');
+  felt.addColorStop(1,   '#0f4a2e');
+  ctx.fillStyle = felt;
+  ctx.fillRect(0, H2 * 0.28, W2, H2 * 0.44);
+
+  // wood border lines
+  ctx.strokeStyle = 'rgba(245,200,66,0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, H2 * 0.28); ctx.lineTo(W2, H2 * 0.28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, H2 * 0.72); ctx.lineTo(W2, H2 * 0.72); ctx.stroke();
+
+  // glow behind winner name
+  const glow = ctx.createRadialGradient(W2 / 2, H2 / 2, 10, W2 / 2, H2 / 2, 200);
+  glow.addColorStop(0,   'rgba(0,240,168,0.18)');
+  glow.addColorStop(1,   'rgba(0,240,168,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W2, H2);
+
+  // 8-ball emoji
+  ctx.font = '52px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('🎱', W2 / 2, H2 * 0.22);
+
+  // winner name
+  ctx.font = 'bold 36px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#00f0a8';
+  ctx.shadowColor = 'rgba(0,240,168,0.6)';
+  ctx.shadowBlur = 18;
+  ctx.fillText(winnerName, W2 / 2, H2 * 0.48);
+  ctx.shadowBlur = 0;
+
+  // "beats" line
+  ctx.font = '500 15px system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillText(`beat ${loserName}`, W2 / 2, H2 * 0.58);
+
+  // FELTORA watermark
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.letterSpacing = '0.18em';
+  ctx.fillText('FELTORA · pool-game-gamma.vercel.app', W2 / 2, H2 * 0.92);
+
+  // gold trophy
+  ctx.font = '28px system-ui';
+  ctx.fillText('🏆', W2 / 2, H2 * 0.78);
+
+  // export
+  const blob = await new Promise((res) => oc.toBlob(res, 'image/png'));
+  const fileName = `feltora-win-${winnerName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
+  const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
+
+  if (file && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: `${winnerName} wins on FELTORA!`,
+        text: `${winnerName} just beat ${loserName} in 8-ball pool on FELTORA 🎱`
+      });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+  // fallback: download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+document.getElementById('btn-share-win')?.addEventListener('click', () => saveWinCard().catch(console.warn));
 
 // ── Tutorial system ──────────────────────────────────────────
 const TUTORIAL_STEPS = [

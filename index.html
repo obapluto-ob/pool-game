@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261104-fix13">
+  <link rel="stylesheet" href="css/styles.css?v=20261104-community">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -450,6 +450,66 @@
       </div>
     </div>
 
+    <!-- ── COMMUNITY SCREEN ─────────────────────────────────────── -->
+    <section class="screen" id="community-screen">
+      <div class="community-shell">
+        <header class="community-header">
+          <div class="community-header-left">
+            <button class="ghost-btn" id="community-back" type="button">← Back</button>
+            <div>
+              <h2 class="community-title">The Clubhouse Feed</h2>
+              <p class="community-sub">Wins · Bugs · Ideas · Banter</p>
+            </div>
+          </div>
+          <button class="action-btn primary" id="community-new-post" type="button">+ Post</button>
+        </header>
+
+        <div class="community-tabs" role="tablist" aria-label="Feed categories">
+          <button class="community-tab active" data-feed="all" type="button" role="tab">All</button>
+          <button class="community-tab" data-feed="win" type="button" role="tab">🏆 Wins</button>
+          <button class="community-tab" data-feed="bug" type="button" role="tab">🐛 Bugs</button>
+          <button class="community-tab" data-feed="idea" type="button" role="tab">💡 Ideas</button>
+          <button class="community-tab" data-feed="chat" type="button" role="tab">💬 Chat</button>
+        </div>
+
+        <details class="community-rules" id="community-rules">
+          <summary>Community rules — read before posting</summary>
+          <ul>
+            <li>👍 Be respectful — no hate, harassment or spam</li>
+            <li>🎯 Keep it relevant — wins, bugs, ideas, or pool chat only</li>
+            <li>🚫 No personal info — don't share real names, emails or locations</li>
+            <li>🐛 Bug reports: describe what happened + what you expected</li>
+            <li>💡 Ideas: explain the problem it solves, not just the feature</li>
+            <li>❤️ Like posts you find useful — it helps surface the best content</li>
+          </ul>
+        </details>
+
+        <div class="community-compose" id="community-compose" hidden>
+          <div class="compose-type-row">
+            <span class="mini-label">Post type</span>
+            <div class="compose-types">
+              <button class="compose-type-btn active" data-type="chat" type="button">💬 Chat</button>
+              <button class="compose-type-btn" data-type="win" type="button">🏆 Win</button>
+              <button class="compose-type-btn" data-type="bug" type="button">🐛 Bug</button>
+              <button class="compose-type-btn" data-type="idea" type="button">💡 Idea</button>
+            </div>
+          </div>
+          <textarea class="compose-textarea" id="compose-text" maxlength="280" placeholder="What's on your mind? (280 chars max)"></textarea>
+          <div class="compose-footer">
+            <span class="compose-char-count" id="compose-chars">280</span>
+            <div class="compose-actions">
+              <button class="ghost-btn" id="compose-cancel" type="button">Cancel</button>
+              <button class="action-btn primary" id="compose-submit" type="button">Post</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="community-feed" id="community-feed" aria-live="polite">
+          <div class="feed-empty" id="feed-empty">No posts yet — be the first to post!</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── RESULTS SCREEN ─────────────────────────────────────── -->
     <section class="screen" id="results-screen">
       <div class="results-panel panel">
@@ -483,6 +543,8 @@
 
         <div class="result-actions">
           <button class="action-btn primary" id="rematch" type="button">Rematch</button>
+          <button class="action-btn" id="btn-share-win" type="button" hidden>📸 Share Win</button>
+          <button class="action-btn" id="btn-post-community" type="button">🌐 Community</button>
           <button class="action-btn" id="results-lobby" type="button">Lobby</button>
         </div>
       </div>
@@ -509,7 +571,8 @@
   <script src="src/auth.js?v=20261104-fix12" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261104-fix10" defer></script>
-  <script src="src/game.js?v=20261104-fix13" defer></script>
+  <script src="src/game.js?v=20261104-community" defer></script>
+  <script src="src/community.js?v=20261104-community" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

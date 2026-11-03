@@ -1734,10 +1734,12 @@ document.getElementById('btn-join-room').addEventListener('click', () => {
       if (errMsg && errMsg.startsWith('error:')) {
         btn.disabled = false;
         statusEl.hidden = true;
-        const isTimeout = errMsg.includes('timeout');
-        errEl.textContent = isTimeout
-          ? 'Could not connect — taking too long. Both players should be on the page at the same time. Try again.'
-          : 'Could not reach that spot. Check the code is correct and the host is still waiting.';
+        const reason = errMsg.slice('error:'.length);
+        errEl.textContent = reason === 'peer-unavailable'
+          ? 'That spot is no longer reachable. Ask the host to create a fresh spot, then refresh this list.'
+          : ['timeout', 'connection-closed', 'webrtc'].includes(reason)
+            ? 'Connection timed out. The spot may be stale, or this network may block WebRTC. Keep both game pages open and try again on another network.'
+            : 'Could not connect to that spot. Check the code and network, then try again.';
         errEl.hidden = false;
         return;
       }
@@ -2196,6 +2198,9 @@ if (window.FeltoraOnline) {
   window.FeltoraOnline.joinPresence();
   window.FeltoraOnline.getOnlineCount().then(updateOnlineCountBadge);
   window.FeltoraOnline.subscribeOnlineCount(updateOnlineCountBadge);
-  window.addEventListener('pagehide', () => window.FeltoraOnline.leavePresence());
+  window.addEventListener('pagehide', () => {
+    window.FeltoraOnline.destroy();
+    window.FeltoraOnline.leavePresence();
+  });
   window.addEventListener('beforeunload', () => window.FeltoraOnline.leavePresence());
 }

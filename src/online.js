@@ -1,7 +1,7 @@
 /**
  * FELTORA – Online multiplayer + voice chat
  * Uses PeerJS (WebRTC) for P2P data + audio.
- * Spots registry uses a free public JSONBin so guests on ANY device see open spots.
+ * Spots registry uses Firebase so guests on any device can find open spots.
  * Host runs physics and is player 0. Guest is player 1.
  */
 
@@ -66,6 +66,7 @@ const FeltoraOnline = (() => {
   // Uses REST so no SDK needed. Real-time via SSE (EventSource).
   const FB_URL      = 'https://feltora-spots-default-rtdb.firebaseio.com/spots';
   const FB_PRESENCE = 'https://feltora-spots-default-rtdb.firebaseio.com/presence';
+  const SPOT_TTL = 120000;
   let spotsListener    = null; // EventSource for real-time push
   let presenceListener = null; // EventSource for online count
   let onSpotsUpdate    = null; // callback(spots[]) set by game.js
@@ -149,7 +150,7 @@ const FeltoraOnline = (() => {
 
   async function removeSpot(code) {
     try {
-      await fetch(`${FB_URL}/${code}.json`, { method: 'DELETE' });
+      await fetch(`${FB_URL}/${code}.json`, { method: 'DELETE', keepalive: true });
     } catch (e) { console.warn('[spots] remove failed', e); }
     try {
       const local = JSON.parse(localStorage.getItem('feltora-open-spots') || '{}');
@@ -164,13 +165,13 @@ const FeltoraOnline = (() => {
       const res = await fetch(`${FB_URL}.json`, { cache: 'no-store' });
       const data = await res.json();
       if (!data) return [];
-      return Object.values(data).filter((s) => s && now - s.ts < 180000);
+      return Object.values(data).filter((s) => s && now - s.ts < SPOT_TTL);
     } catch (e) {
       console.warn('[spots] fetch failed, using localStorage', e);
       // fallback to localStorage
       try {
         const local = JSON.parse(localStorage.getItem('feltora-open-spots') || '{}');
-        return Object.values(local).filter((s) => s && now - s.ts < 180000);
+        return Object.values(local).filter((s) => s && now - s.ts < SPOT_TTL);
       } catch { return []; }
     }
   }
@@ -186,7 +187,7 @@ const FeltoraOnline = (() => {
           const payload = JSON.parse(e.data);
           const data = payload.data;
           const now = Date.now();
-          const spots = data ? Object.values(data).filter((s) => s && now - s.ts < 180000) : [];
+          const spots = data ? Object.values(data).filter((s) => s && now - s.ts < SPOT_TTL) : [];
           if (onSpotsUpdate) onSpotsUpdate(spots);
         } catch {}
       });
@@ -210,7 +211,13 @@ const FeltoraOnline = (() => {
 
   // ── Destroy ──────────────────────────────────────────────────────
   function destroyPeer() {
-    if (roomCode) removeSpot(roomCode); // fire-and-forget async
+    const hostedCode = role === 'host' ? roomCode : null;
+    role = null;
+    roomCode = null;
+    onStateMsg = null;
+    onPeerReady = null;
+    onPeerLeft = null;
+    if (hostedCode) removeSpot(hostedCode);
     if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
     if (audioCall) { try { audioCall.close(); } catch {} audioCall = null; }
     if (conn)      { try { conn.close();      } catch {} conn = null; }
@@ -224,8 +231,6 @@ const FeltoraOnline = (() => {
       remoteAudio.remove();
       remoteAudio = null;
     }
-    role = null;
-    roomCode = null;
     micEnabled = false;
     voiceActive = false;
   }
@@ -304,7 +309,7 @@ const FeltoraOnline = (() => {
   }
 
   // ── Data channel ─────────────────────────────────────────────────
-  function wireConn(c) {
+  function wireConn(c, onError, onClose, onOpen) {
     conn = c;
     conn.on('open', () => {
       sendData({
@@ -312,6 +317,7 @@ const FeltoraOnline = (() => {
         name:   window._feltoraLocalName   || 'Player',
         avatar: window._feltoraLocalAvatar || 'marlow',
       });
+      if (onOpen) onOpen();
     });
     conn.on('data', (msg) => {
       if (msg.type === 'hello') {
@@ -321,8 +327,14 @@ const FeltoraOnline = (() => {
         onStateMsg(msg);
       }
     });
-    conn.on('close', () => { if (onPeerLeft) onPeerLeft(); });
-    conn.on('error', (e) => console.warn('[online] conn error', e));
+    conn.on('close', () => {
+      if (onClose) onClose();
+      else if (onPeerLeft) onPeerLeft();
+    });
+    conn.on('error', (e) => {
+      console.warn('[online] conn error', e);
+      if (onError) onError(e);
+    });
   }
 
   // ── Host ─────────────────────────────────────────────────────────
@@ -349,9 +361,10 @@ const FeltoraOnline = (() => {
     });
 
     peer.on('connection', (c) => {
-      removeSpot(roomCode);
-      if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
-      wireConn(c);
+      wireConn(c, null, null, () => {
+        removeSpot(roomCode);
+        if (spotHeartbeat) { clearInterval(spotHeartbeat); spotHeartbeat = null; }
+      });
     });
 
     peer.on('call', (call) => { answerCall(call); });
@@ -376,24 +389,42 @@ const FeltoraOnline = (() => {
     roomCode = code.toUpperCase().trim();
 
     peer = new Peer(undefined, PEER_CONFIG);
+    let settled = false;
+    let connected = false;
+    const timeout = setTimeout(() => fail('timeout'), 30000);
+    function fail(reason) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      destroyPeer();
+      onConnected(`error:${reason}`);
+    }
 
     peer.on('open', () => {
       const targetId = 'feltora-' + roomCode;
       const c = peer.connect(targetId, { reliable: true, serialization: 'json' });
-      // 20s timeout — enough for TURN relay negotiation across strict NAT
-      const timeout = setTimeout(() => {
-        if (!c || c.open === false) onConnected('error:timeout');
-      }, 20000);
-      c.on('open', () => clearTimeout(timeout));
-      wireConn(c);
-      onConnected();
+      wireConn(
+        c,
+        (error) => fail(error.type || 'connection'),
+        () => {
+          if (!connected) fail('connection-closed');
+          else if (onPeerLeft) onPeerLeft();
+        }
+      );
+      c.on('open', () => {
+        if (settled) return;
+        connected = true;
+        settled = true;
+        clearTimeout(timeout);
+        onConnected();
+      });
     });
 
     peer.on('call', (call) => { answerCall(call); });
 
     peer.on('error', (e) => {
       console.warn('[online] join error', e);
-      onConnected('error:' + (e.type || 'unknown'));
+      fail(e.type || 'unknown');
     });
   }
 

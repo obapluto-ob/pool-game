@@ -2171,23 +2171,32 @@ h1 {
   .group-pill         { padding: 4px 7px; font-size: 0.55rem; }
   .group-ball         { width: 15px; height: 15px; }
 
-  /* Keep the table's 9:5 proportions while using the full phone width. */
+  /* Rotate only the table so it can use the phone's portrait height. */
   .table-stage {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "canvas"
+      "status"
+      "power";
+    flex: 1 1 auto;
     gap: 8px;
     min-height: 0;
     width: 100%;
-    padding: 8px 8px 0;
+    padding: 8px 8px 6px;
     margin: 0;
+    overflow: hidden;
   }
   .table-shell {
-    width: 100%;
-    border-radius: 10px;
+    position: relative;
+    width: min(180vw, calc(100dvh - 290px));
     max-height: none;
-    flex: 0 0 auto;
+    border-radius: 10px;
+    transform: rotate(90deg);
+    transform-origin: center;
+    justify-self: center;
+    align-self: center;
   }
 
   /* A horizontal bar matches the drag-right gesture used on portrait phones. */
@@ -2254,6 +2263,9 @@ h1 {
   }
   .table-shell { order: 1; }
   .power-box { order: 3; }
+  .table-shell.view-3d {
+    transform: rotate(90deg);
+  }
 }
 
 /* ── Landscape phones ────────────────────────────────────────── */

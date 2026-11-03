@@ -1234,7 +1234,16 @@ function valid(x, y) {
 
 function pos(e) {
   const r = cv.getBoundingClientRect();
+  if (isPortraitMobile()) {
+    const rotatedX = (e.clientX - r.left) / r.width;
+    const rotatedY = (e.clientY - r.top) / r.height;
+    return { x: rotatedY * W, y: (1 - rotatedX) * H };
+  }
   return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+
+function isPortraitMobile() {
+  return window.matchMedia('(max-width: 680px) and (orientation: portrait)').matches;
 }
 
 function track(e) {

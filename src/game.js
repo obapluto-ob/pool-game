@@ -344,8 +344,26 @@ function applyTheme(theme) {
 
 function updateLandscapeHint() {
   const hint = document.getElementById('landscape-hint');
-  if (hint) hint.classList.remove('game-active'); // portrait plays fine, never block
+  if (!hint) return;
+  const gameActive = document.getElementById('game-screen').classList.contains('active');
+  const blockedOrientation = window.matchMedia(
+    '(max-width: 900px) and (max-height: 600px) and (orientation: landscape)'
+  ).matches;
+  hint.classList.toggle('game-active', gameActive);
+  hint.setAttribute('aria-hidden', String(!gameActive || !blockedOrientation));
+  if (gameActive && blockedOrientation) {
+    aimPointerId = null;
+    placePointerId = null;
+    powerPointerId = null;
+    powerPullStart = null;
+    powerPointerActive = false;
+    document.getElementById('power-box').classList.remove('power-charging');
+  }
+  if (gameActive) updateStatusText();
 }
+
+window.addEventListener('resize', updateLandscapeHint);
+window.addEventListener('orientationchange', updateLandscapeHint);
 
 function showScreen(screenName) {
   if (screenName !== 'game' && state === 'bot') {
@@ -429,18 +447,29 @@ function updateStatusText() {
     const target = groups[turn]
       ? `Target: ${groups[turn] === 'solid' ? 'solids' : 'stripes'}.`
       : 'Open table: hit any numbered ball except the 8.';
-    text = `${msg ? `${msg} ` : ''}${playerNames[turn]}’s turn · ${Math.ceil(turnRemaining)}s. ${target} Aim on the table, then pull up on the power control and release to shoot.`;
+    const powerInstruction = isHorizontalPowerBar()
+      ? 'drag right on the power control and release to shoot.'
+      : 'pull up on the power control and release to shoot.';
+    text = `${msg ? `${msg} ` : ''}${playerNames[turn]}’s turn · ${Math.ceil(turnRemaining)}s. ${target} Aim on the table, then ${powerInstruction}`;
   } else if (state === 'rolling') {
     text = 'Balls rolling…';
   }
   status.textContent = text;
   const powerBox = document.getElementById('power-box');
   const canShoot = state === 'aim' && !(botMode && turn === 1);
+  const horizontalPowerBar = isHorizontalPowerBar();
   powerBox.hidden = false;
   powerBox.setAttribute('aria-disabled', String(!canShoot));
+  powerBox.setAttribute('aria-orientation', horizontalPowerBar ? 'horizontal' : 'vertical');
+  powerBox.setAttribute(
+    'aria-label',
+    horizontalPowerBar
+      ? 'Shot power. Drag right to increase, release to shoot.'
+      : 'Shot power. Pull up to increase, release to shoot.'
+  );
   powerBox.tabIndex = canShoot ? 0 : -1;
   document.getElementById('power-hint').textContent = canShoot
-    ? (isHorizontalPowerBar() ? 'Drag →' : 'Pull up')
+    ? (horizontalPowerBar ? 'Drag →' : 'Pull up')
     : state === 'rolling'
       ? 'In motion'
       : state === 'bot'
@@ -805,14 +834,14 @@ function endShot() {
 }
 
 function shoot() {
-  if (state !== 'aim') return;
+  if (state !== 'aim' || isMobileLandscape()) return;
   if (onlineMode && onlineRole === 'guest') {
     window.FeltoraOnline.send({ type: 'shoot', angle: aim, power: Number(document.getElementById('pw').value) });
     return;
   }
   const power = Number(document.getElementById('pw').value);
   if (power === 0) {
-    msg = 'Shot cancelled at 0% power. Pull up to set shot strength.';
+    msg = `Shot cancelled at 0% power. ${isHorizontalPowerBar() ? 'Drag right' : 'Pull up'} to set shot strength.`;
     ui();
     return;
   }
@@ -834,6 +863,12 @@ function shoot() {
 function isHorizontalPowerBar() {
   // portrait mobile uses horizontal bar
   return window.matchMedia('(max-width: 680px) and (orientation: portrait)').matches;
+}
+
+function isMobileLandscape() {
+  return window.matchMedia(
+    '(max-width: 900px) and (max-height: 600px) and (orientation: landscape)'
+  ).matches;
 }
 
 function updatePulledPower(clientX, clientY) {
@@ -1233,6 +1268,7 @@ function pos(e) {
 }
 
 function track(e) {
+  if (isMobileLandscape()) return;
   if (!document.getElementById('game-screen').classList.contains('active')) return;
   if (state !== 'aim' && state !== 'place') return;
   if (botMode && turn === 1) return;
@@ -1293,7 +1329,7 @@ cv.addEventListener('pointercancel', (e) => {
 
 const powerBox = document.getElementById('power-box');
 powerBox.addEventListener('pointerdown', (event) => {
-  if (state !== 'aim' || (botMode && turn === 1)) return;
+  if (isMobileLandscape() || state !== 'aim' || (botMode && turn === 1)) return;
   event.preventDefault();
   powerPointerActive = true;
   powerPointerId = event.pointerId;
@@ -1360,7 +1396,7 @@ document.getElementById('rematch').addEventListener('click', () => {
   }
 });
 function adjustAim(direction) {
-  if (state !== 'aim') return;
+  if (isMobileLandscape() || state !== 'aim') return;
   aim += direction * 0.04;
 }
 
@@ -1393,7 +1429,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   applyTheme(current === 'dark' ? 'light' : 'dark');
 });
 powerBox.addEventListener('keydown', (event) => {
-  if (state !== 'aim' || (botMode && turn === 1)) return;
+  if (isMobileLandscape() || state !== 'aim' || (botMode && turn === 1)) return;
   if (['ArrowLeft', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
     setPower(Number(document.getElementById('pw').value) - 5);
@@ -1840,6 +1876,7 @@ function handleOnlineMsg(msg_) {
 
 // Voice toggle button
 document.getElementById('voice-toggle-btn').addEventListener('click', () => {
+  if (!onlineMode || !onlineRole) return;
   window.FeltoraOnline.toggleMic();
 });
 
@@ -1858,6 +1895,7 @@ function setProfileAvatar(avatar) {
 
 window.addEventListener('keydown', (e) => {
   if (e.target === powerBox) return;
+  if (isMobileLandscape()) return;
   if (e.code === 'Space' && document.getElementById('game-screen').classList.contains('active')) {
     e.preventDefault();
     shoot();

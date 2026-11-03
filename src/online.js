@@ -30,30 +30,18 @@ const FeltoraOnline = (() => {
   }
 
   // ── PeerJS config ────────────────────────────────────────────────
-  // Uses PeerJS cloud (reliable) + STUN + free TURN relays for strict NAT
+  // Metered TURN — handles strict NAT (mobile networks, corporate WiFi)
+  const METERED_USERNAME   = 'fa204cf077001153a288e315';
+  const METERED_CREDENTIAL = 'ThTKuVAdTjnnzRet';
   const PEER_CONFIG = {
     host: '0.peerjs.com', port: 443, path: '/', secure: true,
     config: {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' },
-        // free TURN relays — handles strict NAT (mobile networks, corporate WiFi)
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        { urls: 'turn:global.relay.metered.ca:80',                  username: METERED_USERNAME, credential: METERED_CREDENTIAL },
+        { urls: 'turn:global.relay.metered.ca:80?transport=tcp',    username: METERED_USERNAME, credential: METERED_CREDENTIAL },
+        { urls: 'turn:global.relay.metered.ca:443',                 username: METERED_USERNAME, credential: METERED_CREDENTIAL },
+        { urls: 'turns:global.relay.metered.ca:443?transport=tcp',  username: METERED_USERNAME, credential: METERED_CREDENTIAL },
       ],
       iceCandidatePoolSize: 10
     },

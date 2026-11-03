@@ -2174,12 +2174,13 @@ h1 {
   /* Keep the table's 9:5 proportions while using the full phone width. */
   .table-stage {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 8px;
     min-height: 0;
     width: 100%;
-    padding: 8px 8px 6px;
+    padding: 8px 8px 0;
     margin: 0;
   }
   .table-shell {
@@ -2242,7 +2243,7 @@ h1 {
     order: 2;
     width: 100%;
     font-size: 0.7rem;
-    padding: 8px 12px;
+    padding: 6px 12px;
     text-align: center;
     min-height: 0;
     line-height: 1.4;

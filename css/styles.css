@@ -2705,3 +2705,13 @@ h1 {
   transition: box-shadow var(--t-base), background var(--t-base);
 }
 #tutorial-next:hover { box-shadow: 0 0 16px var(--accent-glow); }
+
+/* ── Timer warning pulse ───────────────────────────────────────── */
+.player-card.timer-warning {
+  border-color: var(--danger) !important;
+  animation: timer-pulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes timer-pulse {
+  from { box-shadow: 0 0 0 1px var(--danger), 0 0 8px rgba(255,77,61,0.3); }
+  to   { box-shadow: 0 0 0 2px var(--danger), 0 0 20px rgba(255,77,61,0.55); }
+}

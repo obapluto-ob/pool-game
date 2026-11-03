@@ -2198,6 +2198,8 @@ function frame(t) {
       powerPullAxis = null;
       powerPointerActive = false;
       document.getElementById('power-box').classList.remove('power-charging');
+      // clear warning state
+      document.querySelectorAll('.player-card').forEach((c) => c.classList.remove('timer-warning'));
       setPower(50);
       if (expiredState === 'place') {
         cue.on = true;
@@ -2208,10 +2210,19 @@ function frame(t) {
       state = 'aim';
       aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
       msg = 'Turn expired. Your turn.';
+      announceGameAction('⏰ Time\'s up! Turn passed.');
+      requestSound('menu');
       ui();
       if (onlineMode && onlineRole === 'host') sendOnlineState();
       scheduleBotTurn();
     } else if (Math.ceil(turnRemaining) !== priorSecond) {
+      // warning pulse on active card when ≤10s
+      const activeCard = document.getElementById('player-card-' + turn);
+      if (activeCard) activeCard.classList.toggle('timer-warning', turnRemaining <= 10);
+      // countdown beep for last 5 seconds
+      if (turnRemaining <= 5 && Math.ceil(turnRemaining) !== Math.ceil(turnRemaining + dt)) {
+        requestSound('menu', 0.4);
+      }
       updatePlayerDisplay();
       updateStatusText();
     }

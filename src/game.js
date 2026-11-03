@@ -2,6 +2,9 @@ const cv = document.getElementById('c');
 const g = cv.getContext('2d');
 const W = 900, H = 500, L = 50, T = 50, R = 850, B = 450, BR = 10;
 const POCKETS = [[L, T, 22], [450, T - 4, 20], [R, T, 22], [L, B, 22], [450, B + 4, 20], [R, B, 22]];
+const BALL_BALL_RESTITUTION = 0.94;
+const CUSHION_RESTITUTION = 0.8;
+const ROLLING_DECELERATION = 0.22;
 const COL = ['', '#f2c230', '#2b5fc4', '#d6382f', '#6b3fa0', '#f08a24', '#2e9b5a', '#8b2a2a', '#161616'];
 const WHITE = '#f7f5ee';
 const cuePalettes = {
@@ -665,7 +668,7 @@ function physics() {
             if (firstHit === null) firstHit = a === cue ? b : a;
           }
           if (Math.abs(rel) > 0.35) requestSound('collision', Math.min(1.3, Math.abs(rel) / 9));
-          const imp = -(1 + 0.96) * rel / 2;
+          const imp = -(1 + BALL_BALL_RESTITUTION) * rel / 2;
           a.vx -= imp * nx;
           a.vy -= imp * ny;
           b.vx += imp * nx;
@@ -685,30 +688,35 @@ function physics() {
       if (b.x < L + BR) {
         if (Math.abs(b.vx) > 0.6) requestSound('cushion', Math.min(1.3, Math.abs(b.vx) / 11));
         b.x = L + BR;
-        b.vx = Math.abs(b.vx) * 0.8;
+        b.vx = Math.abs(b.vx) * CUSHION_RESTITUTION;
       }
       if (b.x > R - BR) {
         if (Math.abs(b.vx) > 0.6) requestSound('cushion', Math.min(1.3, Math.abs(b.vx) / 11));
         b.x = R - BR;
-        b.vx = -Math.abs(b.vx) * 0.8;
+        b.vx = -Math.abs(b.vx) * CUSHION_RESTITUTION;
       }
       if (b.y < T + BR) {
         if (Math.abs(b.vy) > 0.6) requestSound('cushion', Math.min(1.3, Math.abs(b.vy) / 11));
         b.y = T + BR;
-        b.vy = Math.abs(b.vy) * 0.8;
+        b.vy = Math.abs(b.vy) * CUSHION_RESTITUTION;
       }
       if (b.y > B - BR) {
         if (Math.abs(b.vy) > 0.6) requestSound('cushion', Math.min(1.3, Math.abs(b.vy) / 11));
         b.y = B - BR;
-        b.vy = -Math.abs(b.vy) * 0.8;
+        b.vy = -Math.abs(b.vy) * CUSHION_RESTITUTION;
       }
     }
   }
   for (const b of balls) {
     if (!b.on) continue;
-    b.vx *= 0.988;
-    b.vy *= 0.988;
-    if (b.vx * b.vx + b.vy * b.vy < 0.0036) b.vx = b.vy = 0;
+    const speed = Math.hypot(b.vx, b.vy);
+    if (speed <= ROLLING_DECELERATION) {
+      b.vx = b.vy = 0;
+      continue;
+    }
+    const rollingFactor = (speed - ROLLING_DECELERATION) / speed;
+    b.vx *= rollingFactor;
+    b.vy *= rollingFactor;
   }
 }
 
@@ -821,7 +829,7 @@ function shoot() {
     ui();
     return;
   }
-  const sp = 6 + (power / 100) * 32;
+  const sp = 38 * (power / 100) ** 0.78;
   const group = groups[turn];
   eightBallReadyAtShot = !!group && !balls.some((b) => b.on && b.n !== 8 && b.n > 0 && grp(b.n) === group);
   firstHit = null;

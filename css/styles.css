@@ -2156,6 +2156,10 @@ h1 {
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
   }
+  body:has(#nl-badge-frame) .screen.game-screen.active {
+    height: calc(100dvh - 64px);
+    --netlify-badge-clearance: 84px;
+  }
 
   .match-header {
     grid-template-columns: 1fr 1fr;
@@ -2190,7 +2194,7 @@ h1 {
   }
   .table-shell {
     position: relative;
-    width: min(180vw, max(0px, calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom) - 300px)));
+    width: min(180vw, max(0px, calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom) - 300px - var(--netlify-badge-clearance, 0px))));
     max-height: none;
     border-radius: 10px;
     transform: rotate(90deg);
@@ -2294,6 +2298,10 @@ h1 {
     animation: none;
     padding: var(--safe-area-top) 0 var(--safe-area-bottom);
   }
+  body:has(#nl-badge-frame) .screen.game-screen.active {
+    height: calc(100dvh - 64px);
+    --netlify-badge-clearance: 84px;
+  }
 
   .match-header   { padding: 3px 8px; gap: 5px; flex-shrink: 0; }
   .player-card    { padding: 4px 8px; }
@@ -2316,7 +2324,7 @@ h1 {
   }
   .table-shell {
     grid-area: canvas;
-    width: min(100%, calc((100dvh - 120px) * 1.8));
+    width: min(100%, calc((100dvh - 120px - var(--netlify-badge-clearance, 0px)) * 1.8));
     max-height: calc(100dvh - 72px);
     border-radius: 8px;
     justify-self: center;

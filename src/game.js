@@ -5,6 +5,7 @@ const POCKETS = [[L, T, 22], [450, T - 4, 20], [R, T, 22], [L, B, 22], [450, B +
 const BALL_BALL_RESTITUTION = 0.94;
 const CUSHION_RESTITUTION = 0.8;
 const ROLLING_DECELERATION = 0.22;
+const PHYSICS_STEP = 1 / 60;
 const COL = ['', '#f2c230', '#2b5fc4', '#d6382f', '#6b3fa0', '#f08a24', '#2e9b5a', '#8b2a2a', '#161616'];
 const WHITE = '#f7f5ee';
 const cuePalettes = {
@@ -27,7 +28,7 @@ const playerAvatars = ['marlow', 'rook'];
 let groupBallNumbers = [null, null];
 let balls, cue, state, turn, groups, aim, pocketed, msg, winner, ptr = { x: 230, y: 250 };
 let selectedCue = 'wood';
-let last = 0, acc = 0;
+let last = null, acc = 0;
 let lastOnlineStateAt = 0;
 let aimPointerId = null, placePointerId = null, powerPointerId = null, powerPointerActive = false;
 let powerPullStart = null, powerStartingValue = 50;
@@ -837,6 +838,11 @@ function shoot() {
   lastRollingSampleAt = performance.now();
   cue.vx = Math.cos(aim) * sp;
   cue.vy = Math.sin(aim) * sp;
+  for (const ball of balls) {
+    ball.renderX = ball.x;
+    ball.renderY = ball.y;
+  }
+  acc = 0;
   pocketed = [];
   msg = '';
   aimPointerId = null;
@@ -1205,8 +1211,12 @@ function draw() {
     g.stroke();
   }
 
+  const renderAlpha = state === 'rolling' ? Math.min(1, acc / PHYSICS_STEP) : 1;
   for (const b of balls) {
-    if (b.on) drawBall(b, b.x, b.y);
+    if (!b.on) continue;
+    const x = Number.isFinite(b.renderX) ? b.renderX + (b.x - b.renderX) * renderAlpha : b.x;
+    const y = Number.isFinite(b.renderY) ? b.renderY + (b.y - b.renderY) * renderAlpha : b.y;
+    drawBall(b, x, y);
   }
 
   if (state === 'place') {
@@ -1956,7 +1966,7 @@ function loadPreferences() {
 }
 
 function frame(t) {
-  const dt = Math.min(0.05, (t - last) / 1000 || 0);
+  const dt = last === null ? 0 : (t - last) / 1000;
   last = t;
   if (document.getElementById('game-screen').classList.contains('active') && (state === 'aim' || state === 'place')) {
     const priorSecond = Math.ceil(turnRemaining);
@@ -1990,8 +2000,12 @@ function frame(t) {
   }
   if (state === 'rolling') {
     acc += dt;
-    while (acc >= 1 / 60) {
-      acc -= 1 / 60;
+    while (acc >= PHYSICS_STEP - 1e-10) {
+      acc = Math.max(0, acc - PHYSICS_STEP);
+      for (const ball of balls) {
+        ball.renderX = ball.x;
+        ball.renderY = ball.y;
+      }
       physics();
     }
     if (t - lastRollingSampleAt >= 170) {
@@ -2012,6 +2026,11 @@ function frame(t) {
   if (document.getElementById('game-screen').classList.contains('active')) draw();
   requestAnimationFrame(frame);
 }
+
+document.addEventListener('visibilitychange', () => {
+  last = null;
+  acc = 0;
+});
 
 setCueStyle('wood');
 setProfileAvatar('marlow');

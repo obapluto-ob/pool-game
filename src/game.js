@@ -377,6 +377,7 @@ function showScreen(screenName) {
   document.getElementById('lobby-screen').classList.toggle('active', screenName === 'lobby');
   document.getElementById('game-screen').classList.toggle('active', screenName === 'game');
   document.getElementById('results-screen').classList.toggle('active', screenName === 'results');
+  if (screenName === 'game') setTimeout(() => typeof startTutorial === 'function' && startTutorial(false), 800);
 }
 
 function updatePlayerDisplay() {
@@ -2566,13 +2567,7 @@ document.getElementById('how-to-play-btn').addEventListener('click', () => {
 });
 
 // auto-show for first-time users after they enter the game screen
-const _origShowScreen = showScreen;
-function showScreen(name) {
-  _origShowScreen(name);
-  if (name === 'game') {
-    setTimeout(() => startTutorial(false), 800);
-  }
-}
+// patched directly into showScreen below
 
 // ── Presence (online count) ──────────────────────────────────────
 function updateOnlineCountBadge(n) {

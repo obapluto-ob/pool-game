@@ -274,8 +274,8 @@ async function playGameSound(kind, strength = 1) {
       playPluck(note, now + index * 0.13, 0.11, effectsBus, 0.7);
     });
   } else if (kind === 'defeat') {
-    [392, 311.13].forEach((note, index) => {
-      playPluck(note, now + index * 0.2, 0.1, effectsBus, 0.65);
+    [392, 311.13, 233.08].forEach((note, index) => {
+      playPluck(note, now + index * 0.16, 0.085, effectsBus, 0.65);
     });
   }
 }
@@ -372,12 +372,13 @@ function updatePlayerDisplay() {
     const group = document.getElementById('group-' + i);
     const groupPill = document.getElementById('group-pill-' + i);
     const groupRemaining = document.getElementById('group-remaining-' + i);
-    const indicator = document.getElementById('group-indicator-' + i);
+    const ballRack = document.getElementById('player-ball-rack-' + i);
     const resultGroup = document.getElementById('result-group-' + i);
     const label = groups[i] ? (groups[i] === 'solid' ? 'Solids' : 'Stripes') : 'Open';
-    const remaining = groups[i]
-      ? balls.filter((ball) => ball.on && grp(ball.n) === groups[i]).length
-      : 0;
+    const remainingBalls = groups[i]
+      ? balls.filter((ball) => ball.on && grp(ball.n) === groups[i]).sort((a, b) => a.n - b.n)
+      : [];
+    const remaining = remainingBalls.length;
     group.textContent = label;
     groupRemaining.textContent = groups[i] ? `${remaining} left` : '';
     groupRemaining.hidden = !groups[i];
@@ -385,25 +386,20 @@ function updatePlayerDisplay() {
       'aria-label',
       groups[i] ? `${label}, ${remaining} ${remaining === 1 ? 'ball' : 'balls'} remaining` : 'Group not assigned'
     );
-    indicator.dataset.group = groups[i] || 'open';
-    // show count of balls pocketed by this player
-    const pocketedCount = groups[i]
-      ? balls.filter((b) => !b.on && b.n > 0 && b.n !== 8 && grp(b.n) === groups[i]).length
-      : 0;
-    const ballNumber = groupBallNumbers[i];
-    indicator.dataset.ballNumber = ballNumber === null ? '' : String(ballNumber);
-    indicator.textContent = pocketedCount > 0 ? String(pocketedCount) : (ballNumber === null ? '' : String(ballNumber));
-    if (ballNumber === null || ballNumber === 0 || !COL[ballNumber]) {
-      indicator.style.removeProperty('--ball-color');
-    } else {
-      indicator.style.setProperty('--ball-color', COL[ballNumber]);
-    }
-    indicator.setAttribute(
+    ballRack.replaceChildren();
+    ballRack.setAttribute(
       'aria-label',
-      ballNumber === null
-        ? groups[i] ? `${label} group; no own ball pocketed yet` : 'Group not assigned'
-        : `${label} group, ${pocketedCount} ball${pocketedCount !== 1 ? 's' : ''} pocketed`
+      groups[i] ? `${label}: ${remainingBalls.map((ball) => ball.n).join(', ') || 'no balls remaining'}` : 'No group assigned yet'
     );
+    for (const ball of remainingBalls) {
+      const marker = document.createElement('span');
+      marker.className = `rack-ball${ball.n > 8 ? ' stripe' : ''}`;
+      marker.dataset.number = String(ball.n);
+      marker.style.setProperty('--ball-color', COL[ball.n > 8 ? ball.n - 8 : ball.n]);
+      marker.textContent = String(ball.n);
+      marker.setAttribute('aria-hidden', 'true');
+      ballRack.append(marker);
+    }
     resultGroup.textContent = label;
     card.classList.toggle('active', state !== 'over' && turn === i);
     tag.textContent = state === 'bot' && turn === i
@@ -514,18 +510,26 @@ function updatePowerReadout() {
 function showResults() {
   const localWon = winner === onlineLocalPlayer;
   const winnerName = playerNames[winner] || 'Player 1';
-  document.getElementById('winner-name').textContent = winnerName;
+  const resultsScreen = document.getElementById('results-screen');
+  resultsScreen.dataset.outcome = localWon ? 'win' : 'loss';
+  document.getElementById('winner-name').textContent = localWon ? 'You win!' : 'So close!';
   for (let i = 0; i < 2; i++) {
     document.getElementById(`result-player-name-${i}`).textContent = playerNames[i];
     document.getElementById(`result-player-${i}`).classList.toggle('winner', winner === i);
   }
   updateAvatarDisplays();
-  document.getElementById('results-badge').textContent = 'Match complete';
+  document.getElementById('results-badge').textContent = localWon ? 'Victory' : 'Frame lost';
   document.getElementById('results-outcome').textContent =
-    `${winnerName} wins the frame · ${playerNames[1 - winner]} loses`;
+    localWon
+      ? `You beat ${playerNames[1 - winner]}!`
+      : `${winnerName} takes this frame. Rematch?`;
   document.getElementById('winner-summary').textContent = msg || `${winnerName} wins the frame.`;
   showScreen('results');
   requestSound(localWon ? 'victory' : 'defeat');
+  // mark spot as full so other users can't join a finished game
+  if (onlineMode && onlineRole === 'host' && window.FeltoraOnline) {
+    window.FeltoraOnline.markSpotFull();
+  }
   // confetti burst for winner
   if (localWon) {
     const panel = document.getElementById('results-screen');
@@ -1397,10 +1401,18 @@ document.getElementById('rematch').addEventListener('click', () => {
       newGame();
       sendOnlineState();
     } else {
-      // guest requests rematch — send signal, wait for host to start
-      window.FeltoraOnline.send({ type: 'rematch-request' });
+      // guest requests rematch — send signal with name, wait for host to start
+      window.FeltoraOnline.send({ type: 'rematch-request', name: playerNames[onlineLocalPlayer] });
       document.getElementById('rematch').textContent = 'Waiting for host…';
       document.getElementById('rematch').disabled = true;
+      // timeout: re-enable after 30s if host doesn't respond
+      setTimeout(() => {
+        const btn = document.getElementById('rematch');
+        if (btn.disabled && btn.textContent === 'Waiting for host…') {
+          btn.textContent = 'Rematch';
+          btn.disabled = false;
+        }
+      }, 30000);
     }
   } else {
     newGame();
@@ -1436,32 +1448,47 @@ focusViewButton.addEventListener('click', () => {
   gameTools.open = false;
 });
 
-document.getElementById('snapshot-btn').addEventListener('click', () => {
+document.getElementById('snapshot-btn').addEventListener('click', async () => {
   try {
-    cv.toBlob((blob) => {
-      if (!blob) {
-        console.warn('Table snapshot could not be created.');
-        announceGameAction('Could not create the table image.');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
+    const blob = await new Promise((resolve, reject) => {
+      cv.toBlob((image) => {
+        if (image) resolve(image);
+        else reject(new Error('The browser returned an empty image.'));
+      }, 'image/png');
+    });
+    const fileName = `feltora-table-${Date.now()}.png`;
+    const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
+    if (file && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
       try {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `feltora-table-${Date.now()}.png`;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        announceGameAction('Table image download started.');
+        await navigator.share({ files: [file], title: 'FELTORA table' });
+        announceGameAction('Table image ready to save or share.');
+        gameTools.open = false;
+        return;
       } catch (error) {
-        URL.revokeObjectURL(url);
-        console.warn('Table snapshot could not be downloaded.', error);
-        announceGameAction('Could not download the table image.');
+        if (error?.name === 'AbortError') {
+          gameTools.open = false;
+          return;
+        }
+        console.warn('Native image sharing failed; opening the image instead.', error);
       }
-    }, 'image/png');
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    announceGameAction('Table image opened or downloaded.');
   } catch (error) {
-    console.warn('Table snapshot could not be saved.', error);
+    if (error?.name === 'AbortError') {
+      gameTools.open = false;
+      return;
+    }
+    console.warn('Table snapshot could not be saved or shared.', error);
     announceGameAction('Could not save the table image.');
   }
   gameTools.open = false;
@@ -1639,25 +1666,49 @@ let spotsPollingTimer = null;
 function applySpotsList(spots) {
   const list = document.getElementById('live-spots-list');
   if (!list) return;
-  const dot = '<span class="spots-live-dot" title="Live"></span>';
+  const registryAvailable = window.FeltoraOnline?.isSpotRegistryAvailable?.() !== false;
+  const header = document.createElement('div');
+  header.className = 'spots-header';
+  const dot = document.createElement('span');
+  dot.className = `spots-live-dot${registryAvailable ? '' : ' unavailable'}`;
+  dot.title = registryAvailable ? 'Live' : 'Spot discovery unavailable';
+  const hint = document.createElement('span');
+  hint.className = 'online-hint';
+  hint.style.margin = '0';
+  header.append(dot, hint);
+  list.replaceChildren(header);
   if (!spots || !spots.length) {
-    list.innerHTML = `<div class="spots-header">${dot}<span class="online-hint" style="margin:0">No open spots yet — ask a friend to create one</span></div>`;
+    hint.textContent = registryAvailable
+      ? 'No open spots yet — ask a friend to create one'
+      : 'Live spot discovery is unavailable. Ask your friend for the six-character room code.';
     return;
   }
-  list.innerHTML =
-    `<div class="spots-header">${dot}<span class="mini-label" style="margin:0">${spots.length} open spot${spots.length !== 1 ? 's' : ''}</span></div>` +
-    spots.map((s) => {
-      const mascot = window.FeltoraMascots ? window.FeltoraMascots.resolve(s.avatar) : null;
-      const art = mascot ? window.FeltoraMascots.render(s.avatar) : '';
-      return `<button class="spot-card" type="button" data-spot-code="${s.code}">
-        <span class="spot-card-avatar">${art}</span>
-        <span class="spot-card-info">
-          <strong>${s.name}</strong>
-          <small>Waiting for opponent · tap to join</small>
-        </span>
-        <span class="spot-card-join">Join →</span>
-      </button>`;
-    }).join('');
+
+  hint.classList.add('mini-label');
+  hint.textContent = registryAvailable
+    ? `${spots.length} open spot${spots.length !== 1 ? 's' : ''}`
+    : 'Saved spots on this device only · cross-device discovery unavailable';
+  for (const spot of spots) {
+    const button = document.createElement('button');
+    button.className = 'spot-card';
+    button.type = 'button';
+    button.dataset.spotCode = String(spot.code || '');
+    const avatar = document.createElement('span');
+    avatar.className = 'spot-card-avatar';
+    if (window.FeltoraMascots) avatar.innerHTML = window.FeltoraMascots.render(spot.avatar);
+    const info = document.createElement('span');
+    info.className = 'spot-card-info';
+    const name = document.createElement('strong');
+    name.textContent = String(spot.name || 'Player');
+    const note = document.createElement('small');
+    note.textContent = 'Waiting for opponent · tap to join';
+    info.append(name, note);
+    const join = document.createElement('span');
+    join.className = 'spot-card-join';
+    join.textContent = 'Join →';
+    button.append(avatar, info, join);
+    list.append(button);
+  }
   list.querySelectorAll('[data-spot-code]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.getElementById('join-code-input').value = btn.dataset.spotCode;
@@ -1928,9 +1979,10 @@ function handleOnlineMsg(msg_) {
     return;
   }
   if (msg_.type === 'rematch-request' && onlineRole === 'host') {
-    // guest wants a rematch — show prompt to host
+    // guest wants a rematch — show prompt to host with their name
     const rematchBtn = document.getElementById('rematch');
-    rematchBtn.textContent = 'Accept Rematch';
+    const requesterName = msg_.name || playerNames[1];
+    rematchBtn.textContent = `${requesterName} wants rematch — Accept`;
     rematchBtn.disabled = false;
     return;
   }
@@ -2319,3 +2371,11 @@ if (window.FeltoraOnline) {
   });
   window.addEventListener('beforeunload', () => window.FeltoraOnline.leavePresence());
 }
+
+// Bug fix 4: warn before refresh/close during an active online game
+window.addEventListener('beforeunload', (e) => {
+  if (onlineMode && state !== 'over') {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});

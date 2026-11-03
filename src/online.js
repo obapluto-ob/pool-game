@@ -76,6 +76,7 @@ const FeltoraOnline = (() => {
   const FB_URL      = 'https://feltora-spots-default-rtdb.firebaseio.com/spots';
   const FB_PRESENCE = 'https://feltora-spots-default-rtdb.firebaseio.com/presence';
   const SPOT_TTL = 120000;
+  let spotRegistryAvailable = null;
   let spotsListener    = null; // EventSource for real-time push
   let presenceListener = null; // EventSource for online count
   let onSpotsUpdate    = null; // callback(spots[]) set by game.js
@@ -85,12 +86,17 @@ const FeltoraOnline = (() => {
   async function publishSpot(code, name, avatar) {
     const spot = { code, name, avatar, ts: Date.now() };
     try {
-      await fetch(`${FB_URL}/${code}.json`, {
+      const response = await fetch(`${FB_URL}/${code}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(spot),
       });
-    } catch (e) { console.warn('[spots] publish failed', e); }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      spotRegistryAvailable = true;
+    } catch (e) {
+      spotRegistryAvailable = false;
+      console.warn('[spots] publish failed', e);
+    }
     // also mirror to localStorage for same-device fallback
     try {
       const local = JSON.parse(localStorage.getItem('feltora-open-spots') || '{}');
@@ -103,41 +109,59 @@ const FeltoraOnline = (() => {
   async function joinPresence() {
     presenceId = 'u_' + Math.random().toString(36).slice(2, 10);
     const entry = { ts: Date.now() };
+    let registered = false;
     try {
-      await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
+      const response = await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
       });
-    } catch {}
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      registered = true;
+    } catch (e) {
+      console.warn('[presence] registration failed', e);
+    }
+    if (!registered) return;
     // heartbeat every 30s
     if (presenceHb) clearInterval(presenceHb);
     presenceHb = setInterval(async () => {
       try {
-        await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
+        const response = await fetch(`${FB_PRESENCE}/${presenceId}.json`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ts: Date.now() }),
         });
-      } catch {}
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (e) {
+        console.warn('[presence] heartbeat failed', e);
+      }
     }, 30000);
   }
 
   async function leavePresence() {
     if (presenceHb) { clearInterval(presenceHb); presenceHb = null; }
     if (!presenceId) return;
-    try { await fetch(`${FB_PRESENCE}/${presenceId}.json`, { method: 'DELETE' }); } catch {}
+    try {
+      const response = await fetch(`${FB_PRESENCE}/${presenceId}.json`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) {
+      console.warn('[presence] removal failed', e);
+    }
     presenceId = null;
   }
 
   async function getOnlineCount() {
     try {
       const res  = await fetch(`${FB_PRESENCE}.json`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data) return 0;
       const now = Date.now();
       return Object.values(data).filter((e) => e && now - e.ts < 90000).length;
-    } catch { return 0; }
+    } catch (e) {
+      console.warn('[presence] count lookup failed', e);
+      return 0;
+    }
   }
 
   function subscribeOnlineCount(callback) {
@@ -148,19 +172,38 @@ const FeltoraOnline = (() => {
       presenceListener.addEventListener('put',   refresh);
       presenceListener.addEventListener('patch', refresh);
       presenceListener.onerror = () => {
+        console.warn('[presence] realtime subscription failed.');
         if (presenceListener) { presenceListener.close(); presenceListener = null; }
       };
-    } catch {}
+    } catch (e) {
+      console.warn('[presence] realtime subscription could not start', e);
+    }
   }
 
   function unsubscribeOnlineCount() {
     if (presenceListener) { presenceListener.close(); presenceListener = null; }
   }
 
+  async function markSpotFull(code) {
+    const target = code || roomCode;
+    if (!target) return;
+    try {
+      await fetch(`${FB_URL}/${target}.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'full' }),
+      });
+    } catch (e) { console.warn('[spots] markSpotFull failed', e); }
+  }
+
   async function removeSpot(code) {
     try {
-      await fetch(`${FB_URL}/${code}.json`, { method: 'DELETE', keepalive: true });
-    } catch (e) { console.warn('[spots] remove failed', e); }
+      const response = await fetch(`${FB_URL}/${code}.json`, { method: 'DELETE', keepalive: true });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) {
+      spotRegistryAvailable = false;
+      console.warn('[spots] remove failed', e);
+    }
     try {
       const local = JSON.parse(localStorage.getItem('feltora-open-spots') || '{}');
       delete local[code];
@@ -172,10 +215,13 @@ const FeltoraOnline = (() => {
     const now = Date.now();
     try {
       const res = await fetch(`${FB_URL}.json`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      spotRegistryAvailable = true;
       const data = await res.json();
       if (!data) return [];
-      return Object.values(data).filter((s) => s && now - s.ts < SPOT_TTL);
+      return Object.values(data).filter((s) => s && now - s.ts < SPOT_TTL && s.status !== 'full');
     } catch (e) {
+      spotRegistryAvailable = false;
       console.warn('[spots] fetch failed, using localStorage', e);
       // fallback to localStorage
       try {
@@ -205,6 +251,7 @@ const FeltoraOnline = (() => {
         getOpenSpots().then((spots) => { if (onSpotsUpdate) onSpotsUpdate(spots); });
       });
       spotsListener.onerror = () => {
+        console.warn('[spots] realtime subscription failed.');
         // SSE failed — fall back to polling in game.js
         if (spotsListener) { spotsListener.close(); spotsListener = null; }
       };
@@ -561,12 +608,14 @@ const FeltoraOnline = (() => {
     send: sendData,
     destroy: destroyPeer,
     toggleMic, updateVoiceUI,
+    markSpotFull,
     isHost()   { return role === 'host'; },
     isGuest()  { return role === 'guest'; },
     isOnline() { return role !== null; },
     getCode()  { return roomCode; },
     startMic,
     getOpenSpots,
+    isSpotRegistryAvailable() { return spotRegistryAvailable; },
     subscribeSpots,
     unsubscribeSpots,
     joinPresence,

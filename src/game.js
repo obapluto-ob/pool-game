@@ -1,6 +1,18 @@
 const cv = document.getElementById('c');
-const g = cv.getContext('2d');
+const g = cv.getContext('2d', { alpha: false });
 const W = 900, H = 500, L = 50, T = 50, R = 850, B = 450, BR = 10;
+
+// HiDPI / Retina scaling — fixes jagged cue stick and ball edges on mobile
+(function scaleCanvasForDPR() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.width  = W * dpr;
+  cv.height = H * dpr;
+  cv.style.width  = '100%';
+  cv.style.height = 'auto';
+  g.scale(dpr, dpr);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+})();
 const TABLE_CENTER_Y = H / 2;
 const HEAD_STRING = L + (R - L) / 4;
 const FOOT_SPOT = L + (R - L) * 3 / 4;

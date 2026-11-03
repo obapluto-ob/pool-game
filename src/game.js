@@ -786,7 +786,7 @@ function endShot() {
       : firstHit === null
         ? 'Foul: cue ball missed everything. Opponent gets 2 shots.'
         : 'Foul: wrong group hit first. Opponent gets 2 shots.';
-    announceGameAction('⚠ ' + msg, 4500);
+    announceGameAction('⚠ ' + msg + ' — tap the table to place it', 5000);
   } else if (own) {
     // potted own ball — consume one extra shot if active, keep turn
     if (extraShots > 0) extraShots--;
@@ -1241,6 +1241,21 @@ function draw() {
     g.arc(cue.x, cue.y, BR + 4, 0, 7);
     g.stroke();
     if (!cue.on) drawBall(cue, cue.x, cue.y);
+    // placement instruction drawn on canvas — visible on all screen sizes
+    const label = 'TAP OR DRAG TO PLACE CUE BALL';
+    g.save();
+    g.font = 'bold 13px system-ui,sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const tw = g.measureText(label).width;
+    const px = W / 2, py = B + 22;
+    g.fillStyle = 'rgba(0,0,0,0.55)';
+    g.beginPath();
+    g.roundRect(px - tw / 2 - 10, py - 11, tw + 20, 22, 6);
+    g.fill();
+    g.fillStyle = ok ? '#00f0a8' : '#ff6b5e';
+    g.fillText(label, px, py);
+    g.restore();
   }
 
   // Pocketed ball toasts
@@ -2213,6 +2228,7 @@ function frame(t) {
       aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
       msg = 'Turn expired. Your turn.';
       announceGameAction('⏰ Time\'s up! Turn passed.');
+      if (expiredState === 'place') announceGameAction('🔴 Cue ball in hand — tap the table to place it', 5000);
       requestSound('menu');
       ui();
       if (onlineMode && onlineRole === 'host') sendOnlineState();

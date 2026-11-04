@@ -394,6 +394,8 @@ function showScreen(screenName) {
   if (screenName === 'game' || screenName === 'lobby') {
     setTimeout(() => typeof startTutorial === 'function' && startTutorial(false), 900);
   }
+  const fab = document.getElementById('game-phone-fab');
+  if (fab) fab.style.display = screenName === 'game' ? 'flex' : 'none';
 }
 
 function updatePlayerDisplay() {
@@ -2787,7 +2789,8 @@ document.getElementById('tutorial-skip').addEventListener('click', closeTutorial
 document.getElementById('tutorial-backdrop').addEventListener('click', closeTutorial);
 window.addEventListener('resize', () => { if (tutActive) positionTutCard(); });
 
-document.getElementById('how-to-play-btn').addEventListener('click', () => startTutorial(true));
+const howToPlayBtn = document.getElementById('how-to-play-btn');
+if (howToPlayBtn) howToPlayBtn.addEventListener('click', () => startTutorial(true));
 
 // auto-show for first-time users after they enter the game screen
 // patched directly into showScreen below

@@ -1,8 +1,6 @@
 const crypto = require('crypto');
 const { promisify } = require('util');
-const { cert, getApps, initializeApp } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
-const { getDatabase } = require('firebase-admin/database');
+const admin = require('firebase-admin');
 
 const scrypt = promisify(crypto.scrypt);
 const DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://feltora-spots-default-rtdb.firebaseio.com';
@@ -18,13 +16,13 @@ function getServices() {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not configured.');
 
-  const existing = getApps().find((app) => app.name === 'feltora-auth');
-  const app = existing || initializeApp({
-    credential: cert(JSON.parse(serviceAccountJson)),
+  const existing = admin.apps.find((app) => app.name === 'feltora-auth');
+  const app = existing || admin.initializeApp({
+    credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
     databaseURL: DATABASE_URL
   }, 'feltora-auth');
 
-  return { auth: getAuth(app), database: getDatabase(app) };
+  return { auth: admin.auth(app), database: admin.database(app) };
 }
 
 function parseBody(body) {

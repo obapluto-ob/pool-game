@@ -106,18 +106,18 @@ function updateAvatarDisplays() {
     `${selectedMascot.name} · ${selectedMascot.title}`;
 }
 
-function setCueStyle(style) {
+function setCueStyle(style, syncProfile = false) {
   selectedCue = style;
   const palette = cuePalettes[style] || cuePalettes.wood;
   document.documentElement.style.setProperty('--cue-main', palette.main);
   document.documentElement.style.setProperty('--cue-dark', palette.dark);
   document.documentElement.style.setProperty('--cue-glow', palette.glow);
   document.querySelectorAll('[data-cue]').forEach((b) => b.classList.toggle('active', b.dataset.cue === style));
-  if (window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ cue: style });
+  if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ cue: style });
   try { localStorage.setItem('feltora-cue', style); } catch {}
 }
 
-function setFelt(felt) {
+function setFelt(felt, syncProfile = false) {
   selectedFelt = felt;
   const p = feltPalettes[felt] || feltPalettes.green;
   const r = document.documentElement;
@@ -130,6 +130,7 @@ function setFelt(felt) {
   updateTableColors();
   document.querySelectorAll('[data-felt]').forEach((b) => b.classList.toggle('active', b.dataset.felt === felt));
   try { localStorage.setItem('feltora-felt', felt); } catch {}
+  if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ felt });
 }
 
 function toggle3D() {
@@ -1606,6 +1607,10 @@ displayNameInput.addEventListener('input', () => {
   const cleaned = displayNameInput.value.trim().replace(/\s+/g, ' ').slice(0, 18);
   if (cleaned) updateProfileName(cleaned);
 });
+displayNameInput.addEventListener('change', () => {
+  const username = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+  if (username) window.FeltoraAuth.update({ displayName: playerNames[0] });
+});
 
 const profileTabs = [...document.querySelectorAll('[data-profile-tab]')];
 const activateProfileTab = (tab, focus = false) => {
@@ -1661,17 +1666,17 @@ powerBox.addEventListener('keydown', (event) => {
 });
 
 document.querySelectorAll('[data-cue]').forEach((button) => {
-  button.addEventListener('click', () => setCueStyle(button.dataset.cue));
+  button.addEventListener('click', () => setCueStyle(button.dataset.cue, true));
 });
 
 document.querySelectorAll('[data-felt]').forEach((button) => {
-  button.addEventListener('click', () => setFelt(button.dataset.felt));
+  button.addEventListener('click', () => setFelt(button.dataset.felt, true));
 });
 
 document.getElementById('toggle-3d').addEventListener('click', toggle3D);
 
 document.querySelectorAll('[data-avatar]').forEach((button) => {
-  button.addEventListener('click', () => setProfileAvatar(button.dataset.avatar));
+  button.addEventListener('click', () => setProfileAvatar(button.dataset.avatar, true));
 });
 
 document.querySelectorAll('[data-bot]').forEach((button) => {
@@ -2180,12 +2185,12 @@ document.getElementById('voice-toggle-btn').addEventListener('click', () => {
   window.FeltoraOnline.toggleMic();
 });
 
-function setProfileAvatar(avatar) {
+function setProfileAvatar(avatar, syncProfile = false) {
   playerAvatars[0] = window.FeltoraMascots.resolve(avatar).id;
   updateAvatarDisplays();
   try {
     localStorage.setItem('feltora-avatar', playerAvatars[0]);
-    if (window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
+    if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
       window.FeltoraAuth.update({ avatar: playerAvatars[0] });
     }
   } catch (error) {
@@ -2376,11 +2381,17 @@ try {
 applyTheme(initialTheme);
 
 // ── Auth boot ────────────────────────────────────────────────────
-function bootAuth() {
+async function bootAuth() {
   const user = window.FeltoraAuth.currentUser();
   if (user) {
     applyAccountToLobby(user);
     showScreen('lobby');
+    try {
+      const account = await window.FeltoraAuth.refreshProfile();
+      if (account) applyAccountToLobby(user);
+    } catch (error) {
+      console.error('Cloud profile refresh failed:', error);
+    }
     return;
   }
   // check if a returning user exists — pre-fill and hide the create account tab
@@ -2427,6 +2438,18 @@ function applyAccountToLobby(username) {
   updateProfileName(savedName);
   setProfileAvatar(acc.avatar || 'marlow');
   setCueStyle(acc.cue || 'wood');
+  setFelt(acc.felt || 'green');
+}
+
+function applyGuestProfile() {
+  document.getElementById('profile-account-tag').textContent = 'Guest';
+  document.getElementById('profile-stats').hidden = true;
+  document.getElementById('btn-signout').hidden = true;
+  document.getElementById('display-name').value = 'Guest Player';
+  updateProfileName('Guest Player');
+  setProfileAvatar('marlow');
+  setCueStyle('wood');
+  setFelt('green');
 }
 
 // Auth tab switching
@@ -2522,19 +2545,17 @@ document.getElementById('reg-username').addEventListener('input', () => {
 });
 
 document.getElementById('btn-guest').addEventListener('click', () => {
-  document.getElementById('profile-account-tag').textContent = 'Guest';
+  applyGuestProfile();
   showScreen('lobby');
 });
 
 document.getElementById('btn-signout').addEventListener('click', () => {
   window.FeltoraAuth.logout();
-  document.getElementById('profile-stats').hidden = true;
-  document.getElementById('btn-signout').hidden = true;
-  document.getElementById('profile-account-tag').textContent = 'Guest';
+  applyGuestProfile();
   showScreen('auth');
 });
 
-bootAuth();
+window.addEventListener('DOMContentLoaded', () => { void bootAuth(); }, { once: true });
 requestAnimationFrame(frame);
 
 // ── Win card screenshot ─────────────────────────────────────────

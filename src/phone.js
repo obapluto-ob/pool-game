@@ -920,28 +920,26 @@
   // ── Profile & Feed ───────────────────────────────────────────────
   function phoneUpdateProfile() {
     var me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+    var account = me && window.FeltoraAuth && window.FeltoraAuth.getAccount
+      ? window.FeltoraAuth.getAccount(me) : null;
     var nameEl = document.getElementById('phone-profile-name');
     var tagEl  = document.getElementById('phone-profile-tag');
     var avatarEl = document.getElementById('phone-profile-avatar');
     var playArt  = document.getElementById('phone-play-art');
-    if (nameEl) nameEl.textContent = me || 'Guest';
+    if (nameEl) nameEl.textContent = (account && account.displayName) || me || 'Guest';
     if (tagEl)  tagEl.textContent  = me ? '@' + me : '@guest';
     if (avatarEl && window.FeltoraMascots) {
-      var av = (me && window.FeltoraAuth && window.FeltoraAuth.getAccount && window.FeltoraAuth.getAccount(me))
-        ? (window.FeltoraAuth.getAccount(me).avatar || 'marlow') : 'marlow';
+      var av = account ? (account.avatar || 'marlow') : 'marlow';
       avatarEl.innerHTML = window.FeltoraMascots.render(av);
     }
     if (playArt && window.FeltoraMascots) playArt.innerHTML = window.FeltoraMascots.render('marlow');
-    if (me && window.FeltoraAuth && window.FeltoraAuth.getAccount) {
-      var acc = window.FeltoraAuth.getAccount(me);
-      if (acc && acc.stats) {
-        var w = document.getElementById('pps-wins');
-        var l = document.getElementById('pps-losses');
-        var fr = document.getElementById('pps-frames');
-        if (w) w.textContent = acc.stats.wins;
-        if (l) l.textContent = acc.stats.losses;
-        if (fr) fr.textContent = acc.stats.frames;
-      }
+    if (account && account.stats) {
+      var w = document.getElementById('pps-wins');
+      var l = document.getElementById('pps-losses');
+      var fr = document.getElementById('pps-frames');
+      if (w) w.textContent = account.stats.wins;
+      if (l) l.textContent = account.stats.losses;
+      if (fr) fr.textContent = account.stats.frames;
     }
     var psUser = document.getElementById('ps-username-val');
     if (psUser) psUser.textContent = me || 'Guest';

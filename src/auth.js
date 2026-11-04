@@ -161,6 +161,19 @@ const Auth = (() => {
       return Object.prototype.hasOwnProperty.call(accounts, key) ? accounts[key] : null;
     },
 
+    async refreshProfile() {
+      const cloud = cloudSession();
+      if (!cloud) return null;
+      if (!window.FeltoraFirebase) throw new Error('Firebase profile service is unavailable.');
+
+      const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(cloud.uid));
+      if (!profile || profile.username !== cloud.username) {
+        throw new Error('Your saved profile could not be verified.');
+      }
+
+      return storeAccount(cloud.username, profile, this.getAccount(cloud.username));
+    },
+
     async register(username, pin) {
       const u = typeof username === 'string' ? username.trim().toLowerCase() : '';
       if (!u || u.length < 3 || u.length > 18) return { ok: false, error: 'Username must be 3–18 characters.' };

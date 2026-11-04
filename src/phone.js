@@ -16,25 +16,180 @@
       .then(function(r) { return r.json(); })
       .then(function(d) {
         userCountry = d.country_code || 'KE';
-        // Update tip button label based on country
-        var payBtn = document.getElementById('phone-tip-pay');
-        if (payBtn) {
-          var methods = getTipPaymentMethods(userCountry);
-          var methodsEl = payBtn.querySelector('.tip-pay-methods');
-          if (methodsEl) methodsEl.textContent = methods.label;
-        }
-      }).catch(function() {});
+        rebuildTipUI();
+      }).catch(function() {
+        rebuildTipUI(); // still build with default KE
+      });
   }
 
+  // Rebuild the entire tip UI for the detected country
+  function rebuildTipUI() {
+    var cfg = getGeoConfig(userCountry);
+    selectedTipAmt = 0;
+
+    // Update preset buttons
+    var amtBtns = document.querySelectorAll('.phone-tip-amt');
+    amtBtns.forEach(function(btn, i) {
+      var preset = cfg.presets[i];
+      if (!preset) return;
+      btn.dataset.amount = preset.amount;
+      btn.classList.remove('active');
+      var emojiEl = btn.querySelector('.tip-amt-emoji');
+      var valEl   = btn.querySelector('.tip-amt-val');
+      var lblEl   = btn.querySelector('.tip-amt-label');
+      if (emojiEl) emojiEl.textContent = preset.emoji;
+      if (valEl)   valEl.textContent   = cfg.symbol + ' ' + preset.amount.toLocaleString();
+      if (lblEl)   lblEl.textContent   = preset.label;
+    });
+
+    // Update display
+    var display = document.getElementById('tip-amount-display');
+    if (display) display.textContent = '—';
+
+    // Update pay button methods label
+    var payBtn = document.getElementById('phone-tip-pay');
+    if (payBtn) {
+      var methodsEl = payBtn.querySelector('.tip-pay-methods');
+      if (methodsEl) methodsEl.textContent = cfg.label;
+    }
+
+    // Update custom input min
+    var custom = document.getElementById('tip-custom-amount');
+    if (custom) {
+      custom.min = cfg.minAmount;
+      custom.placeholder = 'Custom amount (' + cfg.symbol + ')';
+    }
+
+    // Reset tipInitDone so initTipView re-binds with new amounts
+    tipInitDone = false;
+    initTipView();
+  }
+
+  // Full geo config — currency, channels, preset amounts, labels
+  var GEO_CONFIG = {
+    KE: { currency:'KES', symbol:'KES', channels:['card','mobile_money','bank'],
+          label:'M-Pesa · Card · Bank',
+          presets:[
+            { amount:50,   emoji:'☕', label:'Coffee' },
+            { amount:200,  emoji:'🍕', label:'Pizza slice' },
+            { amount:500,  emoji:'🍺', label:'Round of drinks' },
+            { amount:1000, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 10 },
+    NG: { currency:'NGN', symbol:'₦', channels:['card','bank','ussd'],
+          label:'Card · Bank · USSD',
+          presets:[
+            { amount:500,   emoji:'☕', label:'Coffee' },
+            { amount:2000,  emoji:'🍕', label:'Pizza slice' },
+            { amount:5000,  emoji:'🍺', label:'Round of drinks' },
+            { amount:10000, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 100 },
+    GH: { currency:'GHS', symbol:'GH₵', channels:['card','mobile_money'],
+          label:'Card · Mobile Money',
+          presets:[
+            { amount:5,   emoji:'☕', label:'Coffee' },
+            { amount:20,  emoji:'🍕', label:'Pizza slice' },
+            { amount:50,  emoji:'🍺', label:'Round of drinks' },
+            { amount:100, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 1 },
+    ZA: { currency:'ZAR', symbol:'R', channels:['card','bank'],
+          label:'Card · Bank',
+          presets:[
+            { amount:20,  emoji:'☕', label:'Coffee' },
+            { amount:80,  emoji:'🍕', label:'Pizza slice' },
+            { amount:200, emoji:'🍺', label:'Round of drinks' },
+            { amount:500, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 5 },
+    TZ: { currency:'TZS', symbol:'TSh', channels:['card','mobile_money'],
+          label:'Card · Mobile Money',
+          presets:[
+            { amount:2000,  emoji:'☕', label:'Coffee' },
+            { amount:8000,  emoji:'🍕', label:'Pizza slice' },
+            { amount:20000, emoji:'🍺', label:'Round of drinks' },
+            { amount:50000, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 500 },
+    UG: { currency:'UGX', symbol:'USh', channels:['card','mobile_money'],
+          label:'Card · Mobile Money',
+          presets:[
+            { amount:5000,   emoji:'☕', label:'Coffee' },
+            { amount:20000,  emoji:'🍕', label:'Pizza slice' },
+            { amount:50000,  emoji:'🍺', label:'Round of drinks' },
+            { amount:100000, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 1000 },
+    US: { currency:'USD', symbol:'$', channels:['card'],
+          label:'Card · Apple Pay · Google Pay',
+          presets:[
+            { amount:1,  emoji:'☕', label:'Coffee' },
+            { amount:5,  emoji:'🍕', label:'Pizza slice' },
+            { amount:10, emoji:'🍺', label:'Round of drinks' },
+            { amount:25, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 1 },
+    GB: { currency:'GBP', symbol:'£', channels:['card'],
+          label:'Card · Apple Pay · Google Pay',
+          presets:[
+            { amount:1,  emoji:'☕', label:'Coffee' },
+            { amount:4,  emoji:'🍕', label:'Pizza slice' },
+            { amount:8,  emoji:'🍺', label:'Round of drinks' },
+            { amount:20, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 1 },
+    EU: { currency:'EUR', symbol:'€', channels:['card'],
+          label:'Card · Apple Pay · Google Pay',
+          presets:[
+            { amount:1,  emoji:'☕', label:'Coffee' },
+            { amount:5,  emoji:'🍕', label:'Pizza slice' },
+            { amount:10, emoji:'🍺', label:'Round of drinks' },
+            { amount:20, emoji:'👑', label:'Legend tier' }
+          ],
+          minAmount: 1 }
+  };
+
+  // EU countries
+  var EU_COUNTRIES = ['DE','FR','IT','ES','NL','BE','AT','PT','FI','IE','GR','LU','SK','SI','EE','LV','LT','MT','CY'];
+
+  function getGeoConfig(country) {
+    if (GEO_CONFIG[country]) return GEO_CONFIG[country];
+    if (EU_COUNTRIES.indexOf(country) !== -1) return GEO_CONFIG['EU'];
+    // other Africa — use USD with mobile_money
+    var africa = ['RW','ET','SN','CI','CM','MZ','ZM','MW','BW','NA','SZ'];
+    if (africa.indexOf(country) !== -1) return {
+      currency:'USD', symbol:'$', channels:['card','mobile_money'],
+      label:'Card · Mobile Money',
+      presets:[
+        { amount:1, emoji:'☕', label:'Coffee' },
+        { amount:5, emoji:'🍕', label:'Pizza slice' },
+        { amount:10, emoji:'🍺', label:'Round of drinks' },
+        { amount:25, emoji:'👑', label:'Legend tier' }
+      ],
+      minAmount: 1
+    };
+    // rest of world — card only
+    return GEO_CONFIG['US'];
+  }
+
+  // kept for backward compat
   function getTipPaymentMethods(country) {
-    var africa = ['KE','NG','GH','ZA','TZ','UG','RW','ET','SN','CI'];
-    var isAfrica = africa.indexOf(country) !== -1;
-    if (country === 'KE') return { currency: 'KES', channels: ['card','mobile_money','bank'], label: 'M-Pesa · Card · Bank' };
-    if (country === 'GH') return { currency: 'GHS', channels: ['card','mobile_money'], label: 'Card · Mobile Money' };
-    if (country === 'NG') return { currency: 'NGN', channels: ['card','bank','ussd'], label: 'Card · Bank · USSD' };
-    if (country === 'ZA') return { currency: 'ZAR', channels: ['card','bank'], label: 'Card · Bank' };
-    if (isAfrica)         return { currency: 'USD', channels: ['card','mobile_money'], label: 'Card · Mobile Money' };
-    return { currency: 'USD', channels: ['card'], label: 'Card · Apple Pay · Google Pay' };
+    var cfg = getGeoConfig(country);
+    return { currency: cfg.currency, channels: cfg.channels, label: cfg.label };
+  }
+
+  // Thank you messages based on tip size (in USD equivalent tiers)
+  function getThankyouMessage(amount, currency, symbol) {
+    // normalize to rough USD for tier comparison
+    var usdRates = { KES:0.0077, NGN:0.00065, GHS:0.068, ZAR:0.054, TZS:0.00038, UGX:0.00027, USD:1, GBP:1.27, EUR:1.09 };
+    var rate = usdRates[currency] || 1;
+    var usd = amount * rate;
+    if (usd < 1)  return { emoji:'☕', msg:'Even a coffee means the world. Thank you for keeping FELTORA alive!' };
+    if (usd < 5)  return { emoji:'🍕', msg:'That pizza slice just funded a new feature. Seriously, thank you!' };
+    if (usd < 15) return { emoji:'🍺', msg:'A round of drinks! You are the reason FELTORA keeps getting better. Legend.' };
+    if (usd < 30) return { emoji:'👑', msg:'You just became FELTORA royalty. This tip covers a whole month of server costs. Thank you!' };
+    return { emoji:'🏆', msg:'This is unreal. You are an absolute legend. FELTORA exists because of people like you. Thank you from the bottom of my heart.' };
   }
 
   var KENYA_STATIONS = [
@@ -624,16 +779,34 @@
   function initTipView() {
     if (tipInitDone) return;
     tipInitDone = true;
+
+    // Remove old listeners by cloning nodes
+    document.querySelectorAll('.phone-tip-amt').forEach(function(btn) {
+      var fresh = btn.cloneNode(true);
+      btn.parentNode.replaceChild(fresh, btn);
+    });
+    var customOld = document.getElementById('tip-custom-amount');
+    if (customOld) {
+      var customFresh = customOld.cloneNode(true);
+      customOld.parentNode.replaceChild(customFresh, customOld);
+    }
+    var payOld = document.getElementById('phone-tip-pay');
+    if (payOld) {
+      var payFresh = payOld.cloneNode(true);
+      payOld.parentNode.replaceChild(payFresh, payOld);
+    }
+
     document.querySelectorAll('.phone-tip-amt').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.phone-tip-amt').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         selectedTipAmt = parseInt(btn.dataset.amount, 10);
         var custom = document.getElementById('tip-custom-amount');
-        if (custom) { custom.value = ''; custom.placeholder = 'or enter custom amount'; }
+        if (custom) custom.value = '';
         updateTipDisplay(selectedTipAmt);
       });
     });
+
     var custom = document.getElementById('tip-custom-amount');
     if (custom) custom.addEventListener('input', function() {
       var v = parseInt(custom.value, 10);
@@ -643,16 +816,22 @@
         updateTipDisplay(v);
       }
     });
+
     var payBtn = document.getElementById('phone-tip-pay');
     if (!payBtn) return;
     payBtn.addEventListener('click', function() {
+      var cfg = getGeoConfig(userCountry);
       var emailEl = document.getElementById('tip-email');
       var amount = selectedTipAmt;
       var email = emailEl ? emailEl.value.trim() : '';
-      if (!amount || amount < 10) { showToast('Pick an amount first.'); return; }
-      if (!email || email.indexOf('@') === -1) { showToast('Enter your email for the receipt.'); return; }
+      if (!amount || amount < cfg.minAmount) {
+        showToast('Pick an amount first.'); return;
+      }
+      if (!email || email.indexOf('@') === -1) {
+        showToast('Enter your email for the receipt.'); return;
+      }
       if (typeof PaystackPop === 'undefined') {
-        showToast('Loading payment... try again in a moment.');
+        showToast('Loading payment...');
         var s = document.createElement('script');
         s.src = 'https://js.paystack.co/v1/inline.js';
         s.onload = function() { triggerPaystack(amount, email); };
@@ -664,34 +843,63 @@
   }
 
   function updateTipDisplay(amount) {
+    var cfg = getGeoConfig(userCountry);
     var display = document.getElementById('tip-amount-display');
-    if (display) display.textContent = 'KES ' + amount.toLocaleString();
+    if (display) display.textContent = cfg.symbol + ' ' + amount.toLocaleString();
   }
 
   function triggerPaystack(amount, email) {
-    var geo = getTipPaymentMethods(userCountry);
+    var cfg = getGeoConfig(userCountry);
+    var thanks = getThankyouMessage(amount, cfg.currency, cfg.symbol);
+    var ref = 'FELTORA-TIP-' + Date.now();
+
     var handler = PaystackPop.setup({
       key: PAYSTACK_KEY,
       email: email,
       amount: amount * 100,
-      currency: geo.currency,
-      channels: geo.channels,
-      ref: 'FELTORA-TIP-' + Date.now(),
+      currency: cfg.currency,
+      channels: cfg.channels,
+      ref: ref,
       metadata: {
-        custom_fields: [{ display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }]
+        custom_fields: [
+          { display_name: 'Game', variable_name: 'game', value: 'FELTORA 8-ball pool' },
+          { display_name: 'Country', variable_name: 'country', value: userCountry },
+          { display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }
+        ]
       },
       callback: function(response) {
-        showToast('Thank you so much! Your tip means everything. Ref: ' + response.reference);
+        // Log to Firebase
+        if (window.FeltoraFirebase) {
+          window.FeltoraFirebase.set('/tips/' + response.reference, {
+            reference: response.reference,
+            amount: amount,
+            currency: cfg.currency,
+            email: email,
+            country: userCountry,
+            ts: Date.now(),
+            status: 'success'
+          }).catch(function() {});
+        }
+        // Show personalised thank you screen
         var tipView = document.getElementById('phone-tip-view-inner');
         if (tipView) {
-          tipView.innerHTML = '<div style="text-align:center;padding:32px 16px;">'
-            + '<div style="font-size:3rem;margin-bottom:12px;">&#x1F917;</div>'
-            + '<h3 style="color:var(--accent);font:800 1rem/1 system-ui,sans-serif;margin:0 0 8px;">Thank you!</h3>'
-            + '<p style="color:var(--muted);font:400 0.72rem/1.5 system-ui,sans-serif;margin:0;">Your tip of ' + geo.currency + ' ' + amount.toLocaleString() + ' was received. You are a legend.</p>'
+          tipView.innerHTML = '<div class="tip-thankyou-screen">'
+            + '<div class="tip-ty-emoji">' + thanks.emoji + '</div>'
+            + '<h3 class="tip-ty-title">Thank you!</h3>'
+            + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
+            + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + amount.toLocaleString() + ' ' + cfg.currency + '</div>'
+            + '<div class="tip-ty-ref">Ref: ' + response.reference + '</div>'
+            + '<button class="tip-ty-back ob-btn-primary" onclick="this.closest('#phone-tip-view-inner') && location.reload()">Back to FELTORA</button>'
             + '</div>';
         }
+        showToast(thanks.emoji + ' ' + thanks.msg.slice(0, 60) + '...');
       },
-      onClose: function() {}
+      onClose: function() {
+        // user closed without paying — show gentle nudge
+        if (selectedTipAmt > 0) {
+          showToast('No pressure! Come back anytime. Every tip helps. 🙏');
+        }
+      }
     });
     handler.openIframe();
   }

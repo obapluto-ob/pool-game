@@ -38,12 +38,15 @@
   };
 
   function obShowStep(n) {
+    n = Math.max(0, Math.min(TOTAL_STEPS - 1, n));
     var prev = obStep;
     obStep = n;
     document.querySelectorAll('.ob-step').forEach(function(s, i) { s.hidden = i !== n; });
     document.querySelectorAll('.ob-dot').forEach(function(d, i) {
       d.classList.toggle('active', i === n);
       d.classList.toggle('done', i < n);
+      if (i === n) d.setAttribute('aria-current', 'step');
+      else d.removeAttribute('aria-current');
     });
     var backBtn = document.getElementById('ob-back');
     if (backBtn) backBtn.hidden = n === 0;

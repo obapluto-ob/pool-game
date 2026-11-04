@@ -30,14 +30,26 @@ const cuePalettes = {
   gold:    { main: '#f3d27b', dark: '#795f18', glow: 'rgba(221,180,85,0.32)' },
   neon:    { main: '#16d69a', dark: '#0d7b60', glow: 'rgba(22,214,154,0.32)' },
   chrome:  { main: '#e8edf5', dark: '#6a7080', glow: 'rgba(180,190,210,0.35)' },
-  crimson: { main: '#e84040', dark: '#6b0f0f', glow: 'rgba(220,50,50,0.32)' }
+  crimson: { main: '#e84040', dark: '#6b0f0f', glow: 'rgba(220,50,50,0.32)' },
+  carbon: { main: '#c4d2d6', dark: '#25343a', glow: 'rgba(130,190,200,0.28)' },
+  ivory: { main: '#fff2d6', dark: '#88795e', glow: 'rgba(255,230,180,0.28)' },
+  obsidian: { main: '#9fa9c1', dark: '#171a25', glow: 'rgba(135,145,180,0.34)' },
+  bamboo: { main: '#c7dc8e', dark: '#40552b', glow: 'rgba(165,210,105,0.28)' },
+  phantom: { main: '#d8e6ff', dark: '#6b7896', glow: 'rgba(160,205,255,0.45)' },
+  inferno: { main: '#ff9b59', dark: '#742716', glow: 'rgba(255,100,45,0.42)' },
+  ghost: { main: '#b5fff0', dark: '#366c68', glow: 'rgba(95,255,220,0.48)' },
+  'legend-cue': { main: '#ffe69a', dark: '#7c5c20', glow: 'rgba(255,210,90,0.5)' }
 };
 const feltPalettes = {
   green:   { top:'#2a7a4a', center:'#1e6038', bottom:'#163d24', cushionTop:'#1a5c34', cushionCenter:'#144a28', cushionBottom:'#0e3319' },
   blue:    { top:'#1a4a8a', center:'#133670', bottom:'#0c2450', cushionTop:'#122e6a', cushionCenter:'#0d2254', cushionBottom:'#081840' },
   burgundy:{ top:'#7a1a2e', center:'#5e1222', bottom:'#3e0c18', cushionTop:'#5e1222', cushionCenter:'#4a0e1c', cushionBottom:'#360a14' },
   slate:   { top:'#3a4a5a', center:'#2c3a48', bottom:'#1e2a36', cushionTop:'#2c3a48', cushionCenter:'#222e3a', cushionBottom:'#18242e' },
-  sand:    { top:'#8a7040', center:'#6e5830', bottom:'#4e3e20', cushionTop:'#6e5830', cushionCenter:'#5a4828', cushionBottom:'#40341c' }
+  sand:    { top:'#8a7040', center:'#6e5830', bottom:'#4e3e20', cushionTop:'#6e5830', cushionCenter:'#5a4828', cushionBottom:'#40341c' },
+  midnight: { top:'#26304f', center:'#182139', bottom:'#0d1226', cushionTop:'#202944', cushionCenter:'#141d35', cushionBottom:'#0a1024' },
+  crimson: { top:'#9b2039', center:'#70172e', bottom:'#45101f', cushionTop:'#761b32', cushionCenter:'#5e1429', cushionBottom:'#3a0c1a' },
+  'obsidian-felt': { top:'#343741', center:'#242731', bottom:'#11131a', cushionTop:'#292c36', cushionCenter:'#1c1f29', cushionBottom:'#0c0e14' },
+  galaxy: { top:'#493176', center:'#2b2050', bottom:'#16162e', cushionTop:'#392660', cushionCenter:'#251b46', cushionBottom:'#11132a' }
 };
 const playerNames = ['Player One', 'Player 2'];
 const playerAvatars = ['marlow', 'rook'];
@@ -49,7 +61,8 @@ let lastOnlineStateAt = 0;
 let lastOnlineTurnSecond = 0;
 let aimPointerId = null, placePointerId = null, powerPointerId = null, powerPointerActive = false;
 let powerPullStart = null, powerStartingValue = 50, powerPullAxis = null;
-let botMode = false, botMascot = 'marlow', botDifficulty = 'medium', botTimer = null;
+let botMode = false, botMascot = 'marlow', botDifficulty = 'medium', botTimer = null, botSafetyTimer = null;
+let botTurnToken = 0;
 let onlineMode = false;
 let onlineRole = null;
 let onlineLocalPlayer = 0;
@@ -57,14 +70,18 @@ let remoteStateReceivedAt = 0;
 let remoteStateInterval = 1000 / 20;
 let view3d = false;
 let selectedFelt = 'green';
+let selectedBallSkin = 'classic';
 let turnRemaining = 30;
 let firstHit = null, eightBallReadyAtShot = false;
 let extraShots = 0; // 2-shot rule: opponent gets 2 shots after a foul
+let localFoulBonus = 0;
+let foulCounts = [0, 0];
 let audioContext = null, masterGain = null, musicBus = null, effectsBus = null;
 let musicTimer = null, musicEnabled = false, musicStarting = false, sfxEnabled = true, lastMenuSound = 0;
 let loungeMeasureIndex = 0;
 let tableColors = {};
 const pocketedToasts = []; // { n, x, y, born }
+const cueTrailSamples = [];
 const lastSoundAt = new Map();
 const recentPhysicalSounds = [];
 let lastImpactSoundAt = 0;
@@ -102,11 +119,17 @@ function updateAvatarDisplays() {
     button.setAttribute('aria-pressed', String(selected));
   });
   const selectedMascot = window.FeltoraMascots.resolve(playerAvatars[0]);
+  const username = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+  const account = username && window.FeltoraAuth.getAccount(username);
   document.getElementById('profile-mascot-title').textContent =
-    `${selectedMascot.name} · ${selectedMascot.title}`;
+    (account && (account.customTitle || account.title)) || `${selectedMascot.name} · ${selectedMascot.title}`;
 }
 
 function setCueStyle(style, syncProfile = false) {
+  if (syncProfile && window.FeltoraStore && !window.FeltoraStore.owns('cues', style)) {
+    if (window.FeltoraPhone) window.FeltoraPhone.openApp('store');
+    return;
+  }
   selectedCue = style;
   const palette = cuePalettes[style] || cuePalettes.wood;
   document.documentElement.style.setProperty('--cue-main', palette.main);
@@ -118,6 +141,10 @@ function setCueStyle(style, syncProfile = false) {
 }
 
 function setFelt(felt, syncProfile = false) {
+  if (syncProfile && window.FeltoraStore && !window.FeltoraStore.owns('felts', felt)) {
+    if (window.FeltoraPhone) window.FeltoraPhone.openApp('store');
+    return;
+  }
   selectedFelt = felt;
   const p = feltPalettes[felt] || feltPalettes.green;
   const r = document.documentElement;
@@ -129,8 +156,20 @@ function setFelt(felt, syncProfile = false) {
   r.style.setProperty('--cushion-bottom',  p.cushionBottom);
   updateTableColors();
   document.querySelectorAll('[data-felt]').forEach((b) => b.classList.toggle('active', b.dataset.felt === felt));
-  try { localStorage.setItem('feltora-felt', felt); } catch {}
   if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ felt });
+  try { localStorage.setItem('feltora-felt', felt); } catch {}
+}
+
+function setBallSkin(skin, syncProfile = false) {
+  if (syncProfile && window.FeltoraStore && !window.FeltoraStore.owns('balls', skin)) {
+    if (window.FeltoraPhone) window.FeltoraPhone.openApp('store');
+    return;
+  }
+  selectedBallSkin = skin || 'classic';
+  if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
+    window.FeltoraAuth.update({ ballSkin: selectedBallSkin });
+  }
+  try { localStorage.setItem('feltora-ball-skin', selectedBallSkin); } catch {}
 }
 
 function toggle3D() {
@@ -381,10 +420,17 @@ function applyTheme(theme) {
   document.documentElement.style.setProperty('color-scheme', next === 'dark' ? 'dark' : 'light');
 }
 
+function clearBotTimers() {
+  window.clearTimeout(botTimer);
+  window.clearTimeout(botSafetyTimer);
+  botTimer = null;
+  botSafetyTimer = null;
+  botTurnToken++;
+}
+
 function showScreen(screenName) {
   if (screenName !== 'game') {
-    window.clearTimeout(botTimer);
-    botTimer = null;
+    clearBotTimers();
     if (state === 'bot') state = 'aim';
   }
   document.getElementById('auth-screen').classList.toggle('active', screenName === 'auth');
@@ -445,10 +491,14 @@ function updatePlayerDisplay() {
         ? extraShots > 0 ? `Cue in hand · ${extraShots} shots` : 'Cue ball in hand'
         : turn === i
           ? extraShots > 0
-            ? `${extraShots} shot${extraShots > 1 ? 's' : ''} · ${Math.ceil(turnRemaining)}s`
-            : `Playing now · ${Math.ceil(turnRemaining)}s`
+            ? `${extraShots} shot${extraShots > 1 ? 's' : ''} · ${displayedTurnSeconds()}s`
+            : `Playing now · ${displayedTurnSeconds()}s`
           : 'Up next';
   }
+}
+
+function displayedTurnSeconds() {
+  return Math.max(1, Math.ceil(turnRemaining));
 }
 
 function updateStatusText() {
@@ -459,7 +509,7 @@ function updateStatusText() {
   } else if (state === 'bot') {
     text = `${playerNames[turn]} is lining up a shot…`;
   } else if (state === 'place') {
-    text = `${msg ? `${msg} ` : ''}${playerNames[turn]} has the cue ball in hand. Tap or drag to place it · ${Math.ceil(turnRemaining)}s.`;
+    text = `${msg ? `${msg} ` : ''}${playerNames[turn]} has the cue ball in hand. Tap or drag to place it · ${displayedTurnSeconds()}s.`;
   } else if (state === 'aim') {
     const target = groups[turn]
       ? `Target: ${groups[turn] === 'solid' ? 'solids' : 'stripes'}.`
@@ -467,7 +517,7 @@ function updateStatusText() {
     const powerInstruction = isHorizontalPowerBar()
       ? 'drag right or pull up on the power control and release to shoot.'
       : 'pull up on the power control and release to shoot.';
-    text = `${msg ? `${msg} ` : ''}${playerNames[turn]}’s turn · ${Math.ceil(turnRemaining)}s. ${target} Aim on the table, then ${powerInstruction}`;
+    text = `${msg ? `${msg} ` : ''}${playerNames[turn]}’s turn · ${displayedTurnSeconds()}s. ${target} Aim on the table, then ${powerInstruction}`;
   } else if (state === 'rolling') {
     text = 'Balls rolling…';
   }
@@ -559,11 +609,72 @@ function showResults() {
       ? `You beat ${playerNames[1 - winner]}!`
       : `${winnerName} takes this frame. Rematch?`;
   document.getElementById('winner-summary').textContent = msg || `${winnerName} wins the frame.`;
+  const lossContext = document.getElementById('loss-context');
+  if (lossContext) {
+    const lossMessages = [
+      'You were one ball away. Bring that focus into the next frame.',
+      'The table turned on that last shot. Rematch?',
+      'Close frame. Take a breath and try again.',
+      'A tricky layout, not the end of the run. Rematch?',
+      'The final pocket was just out of reach. Reset and play again?',
+      'Every frame teaches something. Ready for another?'
+    ];
+    lossContext.hidden = localWon;
+    if (!localWon) lossContext.textContent = lossMessages[Math.floor(Math.random() * lossMessages.length)];
+  }
+  const resultsProgression = document.getElementById('results-progression');
+  const tipPrompt = document.getElementById('results-tip-prompt');
+  const rankOverlay = document.getElementById('rank-up-overlay');
+  let gameProgress = null;
+  if (window.FeltoraStore && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
+    gameProgress = window.FeltoraStore.recordGame({ won: localWon, foulBonus: localFoulBonus });
+  }
+  if (resultsProgression) resultsProgression.hidden = !gameProgress;
+  if (gameProgress) {
+    const currentRank = gameProgress.rank;
+    const nextTarget = currentRank.next;
+    const rankStart = currentRank.min;
+    const fillPercent = nextTarget
+      ? Math.max(0, Math.min(100, (gameProgress.xp - rankStart) / (nextTarget - rankStart) * 100))
+      : 100;
+    document.getElementById('results-xp-gained').textContent = '+' + gameProgress.xpGained + ' XP';
+    document.getElementById('results-rank-copy').textContent = currentRank.name;
+    document.getElementById('results-xp-progress').textContent = nextTarget
+      ? gameProgress.xp + ' / ' + nextTarget + ' XP to ' + (window.FeltoraAuth.rankForXp(nextTarget).name)
+      : gameProgress.xp + ' XP · Highest rank';
+    document.getElementById('results-streak').textContent = 'Day ' + gameProgress.dailyStreak + ' · +' + gameProgress.pointsGained + ' points today';
+    const resultsFill = document.getElementById('results-xp-fill');
+    if (resultsFill) {
+      resultsFill.style.width = '0%';
+      requestAnimationFrame(() => { resultsFill.style.width = fillPercent + '%'; });
+    }
+    updateProgressionDisplay(window.FeltoraAuth.getAccount(window.FeltoraAuth.currentUser()));
+    if (tipPrompt) {
+      let seen = false;
+      try { seen = sessionStorage.getItem('feltora-tip-prompt-seen') === '1'; } catch (error) {}
+      const showTip = gameProgress.winStreak >= 3 && !seen;
+      tipPrompt.hidden = !showTip;
+      if (showTip) {
+        try { sessionStorage.setItem('feltora-tip-prompt-seen', '1'); } catch (error) {}
+      }
+    }
+    const rankUp = gameProgress.previousRank.name !== currentRank.name;
+    if (rankOverlay) {
+      rankOverlay.hidden = !rankUp;
+      if (rankUp) document.getElementById('rank-up-title').textContent = currentRank.name;
+    }
+  } else {
+    if (tipPrompt) tipPrompt.hidden = true;
+    if (rankOverlay) rankOverlay.hidden = true;
+  }
   showScreen('results');
   requestSound(localWon ? 'victory' : 'defeat');
   // mark spot as full so other users can't join a finished game
   if (onlineMode && onlineRole === 'host' && window.FeltoraOnline) {
     window.FeltoraOnline.markSpotFull();
+  }
+  if (localWon && window.FeltoraCommunity && window.FeltoraCommunity.recordWin) {
+    window.FeltoraCommunity.recordWin().catch((error) => console.error('Weekly win could not be recorded:', error));
   }
   // confetti burst for winner
   if (localWon) {
@@ -585,6 +696,7 @@ function showResults() {
       document.getElementById('stat-wins').textContent   = acc.stats.wins;
       document.getElementById('stat-losses').textContent = acc.stats.losses;
       document.getElementById('stat-frames').textContent = acc.stats.frames;
+      updateProgressionDisplay(acc);
     }
   }
 
@@ -603,8 +715,7 @@ function newGame(options = {}) {
   // reset rematch button state
   const rematchBtn = document.getElementById('rematch');
   if (rematchBtn) { rematchBtn.textContent = 'Rematch'; rematchBtn.disabled = false; }
-  window.clearTimeout(botTimer);
-  botTimer = null;
+  clearBotTimers();
   balls = [{ n: 0, x: HEAD_STRING, y: TABLE_CENTER_Y, vx: 0, vy: 0, on: true }];
   cue = balls[0];
   // Rack: 8-ball fixed at centre (slot 4), one corner solid, one corner stripe, rest random
@@ -643,6 +754,8 @@ function newGame(options = {}) {
   winner = -1;
   turnRemaining = 30;
   extraShots = 0;
+  localFoulBonus = 0;
+  foulCounts = [0, 0];
   firstHit = null;
   eightBallReadyAtShot = false;
   aimPointerId = null;
@@ -812,6 +925,8 @@ function endShot() {
   const own = !!groups[me] && obj.some((n) => grp(n) === groups[me]);
   const opponentBallPotted = !!groups[me] && obj.some((n) => grp(n) !== groups[me] && n !== 8);
   if (foul) {
+    foulCounts[me]++;
+    localFoulBonus = foulCounts[1 - onlineLocalPlayer] * 10;
     cue.on = true;
     cue.vx = cue.vy = 0;
     turn = 1 - me;
@@ -1004,25 +1119,49 @@ function placeBotCueBall() {
   aim = Math.atan2(TABLE_CENTER_Y - cue.y, FOOT_SPOT - cue.x);
 }
 
+function finishBotTurn(needsPlacement, token, useFallback) {
+  if (token !== botTurnToken || !botMode || turn !== 1 || state !== 'bot') return;
+  if (!document.getElementById('game-screen').classList.contains('active')) return;
+
+  window.clearTimeout(botTimer);
+  botTimer = null;
+  if (needsPlacement) placeBotCueBall();
+
+  let shot;
+  if (useFallback) {
+    const target = botTargets()[0] || balls.find((ball) => ball.on && ball !== cue);
+    shot = target
+      ? { angle: Math.atan2(target.y - cue.y, target.x - cue.x), power: 55 }
+      : { angle: aim, power: 50 };
+  } else {
+    shot = chooseBotShot();
+  }
+
+  window.clearTimeout(botSafetyTimer);
+  botSafetyTimer = null;
+  aim = shot.angle;
+  setPower(shot.power);
+  state = 'aim';
+  ui();
+  shoot();
+}
+
 function scheduleBotTurn() {
   if (!botMode || turn !== 1 || !document.getElementById('game-screen').classList.contains('active')) return;
   if (state !== 'aim' && state !== 'place') return;
-  window.clearTimeout(botTimer);
+  clearBotTimers();
   const needsPlacement = state === 'place';
+  const token = botTurnToken;
   state = 'bot';
   ui();
   botTimer = window.setTimeout(() => {
     botTimer = null;
-    if (!botMode || turn !== 1 || state !== 'bot') return;
-    if (!document.getElementById('game-screen').classList.contains('active')) return;
-    if (needsPlacement) placeBotCueBall();
-    const shot = chooseBotShot();
-    aim = shot.angle;
-    setPower(shot.power);
-    state = 'aim';
-    ui();
-    shoot();
+    finishBotTurn(needsPlacement, token, false);
   }, botDifficulty === 'easy' ? 1100 : 850);
+  botSafetyTimer = window.setTimeout(() => {
+    console.warn('Bot turn exceeded 5 seconds; using a fallback shot.');
+    finishBotTurn(needsPlacement, token, true);
+  }, 5000);
 }
 
 function ray() {
@@ -1077,8 +1216,15 @@ function drawBall(b, x, y) {
   g.arc(0, 0, BR, 0, 7);
   g.clip();
   const c = b.n === 0 ? WHITE : COL[b.n > 8 ? b.n - 8 : b.n];
+  const isRolling = Math.hypot(b.vx || 0, b.vy || 0) > 0.45;
+  if (selectedBallSkin === 'chrome-balls' && isRolling) {
+    g.filter = `brightness(${1.06 + Math.sin(performance.now() / 170) * 0.08}) saturate(0.65)`;
+  } else if (selectedBallSkin === 'gold-balls') {
+    g.filter = 'sepia(.78) saturate(1.35)';
+  }
   g.fillStyle = b.n > 8 || b.n === 0 ? WHITE : c;
   g.fillRect(-BR, -BR, 2 * BR, 2 * BR);
+  g.filter = 'none';
   if (b.n > 8) {
     g.fillStyle = c;
     g.fillRect(-BR, -5, 2 * BR, 10);
@@ -1098,6 +1244,62 @@ function drawBall(b, x, y) {
   g.beginPath();
   g.arc(-3, -3.5, 2.4, 0, 7);
   g.fill();
+  if (selectedBallSkin === 'marble-balls') {
+    g.strokeStyle = 'rgba(110,220,205,.36)';
+    g.lineWidth = 1.4;
+    g.beginPath();
+    g.arc(-1, 1, BR * 0.72, -2.4, 0.5);
+    g.stroke();
+  } else if (selectedBallSkin === 'gold-balls') {
+    g.strokeStyle = 'rgba(255,230,150,.52)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(0, 0, BR - .8, -.9, 1.1);
+    g.stroke();
+  } else if (selectedBallSkin === 'chrome-balls' && isRolling) {
+    g.strokeStyle = 'rgba(255,255,255,.62)';
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.arc(0, 0, BR - 1, -1.5 + Math.sin(performance.now() / 140) * .2, -.4);
+    g.stroke();
+  }
+  g.restore();
+}
+
+function drawCueTrail() {
+  const trailColors = {
+    phantom: '135,205,255',
+    inferno: '255,91,36',
+    ghost: '100,255,225',
+    'legend-cue': '255,215,100'
+  };
+  const color = trailColors[selectedCue];
+  if (!color || !cue || !cue.on || state !== 'rolling' || Math.hypot(cue.vx, cue.vy) < 0.45) {
+    cueTrailSamples.length = 0;
+    return;
+  }
+  const now = performance.now();
+  const lastSample = cueTrailSamples[cueTrailSamples.length - 1];
+  if (!lastSample || Math.hypot(cue.x - lastSample.x, cue.y - lastSample.y) >= 2.8) {
+    cueTrailSamples.push({ x: cue.x, y: cue.y, at: now });
+  }
+  while (cueTrailSamples.length && now - cueTrailSamples[0].at > 500) cueTrailSamples.shift();
+  if (cueTrailSamples.length < 2) return;
+  g.save();
+  g.lineCap = 'round';
+  g.lineWidth = selectedCue === 'legend-cue' ? 3.2 : 2.5;
+  g.shadowColor = 'rgba(' + color + ',.8)';
+  g.shadowBlur = selectedCue === 'legend-cue' ? 12 : 8;
+  for (let i = 1; i < cueTrailSamples.length; i++) {
+    const previous = cueTrailSamples[i - 1];
+    const point = cueTrailSamples[i];
+    g.globalAlpha = Math.max(0.03, 1 - (now - point.at) / 500);
+    g.strokeStyle = 'rgba(' + color + ',.8)';
+    g.beginPath();
+    g.moveTo(previous.x, previous.y);
+    g.lineTo(point.x, point.y);
+    g.stroke();
+  }
   g.restore();
 }
 
@@ -1299,6 +1501,7 @@ function draw() {
     : onlineMode && onlineRole === 'guest' && remoteStateReceivedAt
       ? Math.min(1, (performance.now() - remoteStateReceivedAt) / remoteStateInterval)
       : Math.min(1, acc / PHYSICS_STEP);
+  drawCueTrail();
   for (const b of balls) {
     if (!b.on) continue;
     const x = Number.isFinite(b.renderX) ? b.renderX + (b.x - b.renderX) * renderAlpha : b.x;
@@ -1485,6 +1688,15 @@ document.getElementById('results-lobby').addEventListener('click', () => {
     updateLobbyForOnline(false);
   }
   showScreen('lobby');
+});
+document.getElementById('rank-up-continue').addEventListener('click', () => {
+  document.getElementById('rank-up-overlay').hidden = true;
+});
+document.getElementById('results-tip-button').addEventListener('click', () => {
+  if (window.FeltoraPhone && window.FeltoraPhone.openApp) window.FeltoraPhone.openApp('tip');
+});
+document.getElementById('results-tip-dismiss').addEventListener('click', () => {
+  document.getElementById('results-tip-prompt').hidden = true;
 });
 document.getElementById('rematch').addEventListener('click', () => {
   if (onlineMode) {
@@ -2087,7 +2299,7 @@ function sendOnlineState() {
   window.FeltoraOnline.send({
     type: 'state',
     balls: balls.map((b) => ({ n: b.n, x: b.x, y: b.y, vx: b.vx, vy: b.vy, on: b.on })),
-    state, turn, groups, groupBallNumbers, extraShots, msg, winner, turnRemaining,
+    state, turn, groups, groupBallNumbers, extraShots, foulCounts, msg, winner, turnRemaining,
     aim:   aim,
     power: Number(document.getElementById('pw').value)
   });
@@ -2138,6 +2350,10 @@ function handleOnlineMsg(msg_) {
     groups = msg_.groups;
     groupBallNumbers = msg_.groupBallNumbers;
     extraShots = msg_.extraShots;
+    if (Array.isArray(msg_.foulCounts) && msg_.foulCounts.length === 2) {
+      foulCounts = msg_.foulCounts.map((count) => Math.max(0, Number(count) || 0));
+      localFoulBonus = foulCounts[1 - onlineLocalPlayer] * 10;
+    }
     msg    = msg_.msg;
     winner = msg_.winner;
     if (Number.isFinite(msg_.turnRemaining)) turnRemaining = msg_.turnRemaining;
@@ -2186,7 +2402,12 @@ document.getElementById('voice-toggle-btn').addEventListener('click', () => {
 });
 
 function setProfileAvatar(avatar, syncProfile = false) {
-  playerAvatars[0] = window.FeltoraMascots.resolve(avatar).id;
+  const resolvedAvatar = window.FeltoraMascots.resolve(avatar).id;
+  if (syncProfile && window.FeltoraStore && !window.FeltoraStore.owns('mascots', resolvedAvatar)) {
+    if (window.FeltoraPhone) window.FeltoraPhone.openApp('store');
+    return;
+  }
+  playerAvatars[0] = resolvedAvatar;
   updateAvatarDisplays();
   try {
     localStorage.setItem('feltora-avatar', playerAvatars[0]);
@@ -2268,6 +2489,7 @@ function loadPreferences() {
     setFelt(savedFelt);
     const savedCue = localStorage.getItem('feltora-cue') || 'wood';
     setCueStyle(savedCue);
+    setBallSkin(localStorage.getItem('feltora-ball-skin') || 'classic');
   } catch (error) {
     console.warn('Saved preferences could not be loaded.', error);
   }
@@ -2436,6 +2658,41 @@ async function bootAuth() {
   showScreen('auth');
 }
 
+function updateProgressionDisplay(account) {
+  const xp = Math.max(0, Number(account && account.xp) || 0);
+  const rank = window.FeltoraAuth && window.FeltoraAuth.rankForXp
+    ? window.FeltoraAuth.rankForXp(xp) : { name: 'Hustler', min: 0, max: 499, next: 500 };
+  const rankEl = document.getElementById('lobby-rank');
+  const labelEl = document.getElementById('lobby-xp-label');
+  const fill = document.getElementById('lobby-xp-fill');
+  const bar = document.getElementById('lobby-xp-bar');
+  const streakEl = document.getElementById('lobby-streak');
+  const pointsEl = document.getElementById('lobby-points');
+  const supporterBadge = document.getElementById('lobby-supporter-badge');
+  if (rankEl) rankEl.textContent = rank.name;
+  const xpWithinRank = xp - rank.min;
+  const rankSpan = Number.isFinite(rank.max) ? rank.max - rank.min + 1 : 1;
+  const progress = rank.name === 'Ghost' ? 100 : Math.max(0, Math.min(100, xpWithinRank / rankSpan * 100));
+  if (labelEl) labelEl.textContent = rank.name === 'Ghost'
+    ? xp + ' XP · MAX'
+    : xpWithinRank + ' / ' + rankSpan + ' XP';
+  if (fill) fill.style.width = progress + '%';
+  if (bar) bar.setAttribute('aria-valuenow', String(Math.round(progress)));
+  if (streakEl) streakEl.textContent = 'Day ' + Math.max(0, Number(account && account.dailyStreak) || 0) + ' 🔥';
+  const points = account && account.points || { today: 0, lastReset: '' };
+  const today = new Date().toISOString().slice(0, 10);
+  if (pointsEl) pointsEl.textContent = (points.lastReset === today ? Math.max(0, Number(points.today) || 0) : 0) + ' pts today';
+  if (supporterBadge) {
+    const supporter = account && account.supporter;
+    const valid = supporter && Number(supporter.tier) > 0
+      && (!supporter.expiresAt || supporter.expiresAt > Date.now());
+    const badge = valid ? ['', '⭐', '🔥', '👻', '👑'][Math.min(4, Number(supporter.tier))] : '';
+    supporterBadge.textContent = badge;
+    supporterBadge.title = badge ? 'FELTORA supporter' : '';
+    supporterBadge.hidden = !badge;
+  }
+}
+
 function applyAccountToLobby(username) {
   const acc = window.FeltoraAuth.getAccount(username);
   if (!acc) return;
@@ -2457,6 +2714,8 @@ function applyAccountToLobby(username) {
   setProfileAvatar(acc.avatar || 'marlow');
   setCueStyle(acc.cue || 'wood');
   setFelt(acc.felt || 'green');
+  setBallSkin(acc.ballSkin || 'classic');
+  updateProgressionDisplay(acc);
 }
 
 function applyGuestProfile() {
@@ -2470,6 +2729,8 @@ function applyGuestProfile() {
   setProfileAvatar('marlow');
   setCueStyle('wood');
   setFelt('green');
+  setBallSkin('classic');
+  updateProgressionDisplay(null);
 }
 
 // Auth tab switching
@@ -2996,7 +3257,10 @@ window.addEventListener('beforeunload', (e) => {
 
   if (lbnPhone) {
     lbnPhone.addEventListener('click', function() {
-      // Open the phone modal — same as game-phone-fab
+      if (window.FeltoraPhone && typeof window.FeltoraPhone.open === 'function') {
+        window.FeltoraPhone.open();
+        return;
+      }
       var modal = document.getElementById('game-phone-modal');
       var inner = document.getElementById('game-phone-modal-inner');
       var frame = document.getElementById('phone-frame');

@@ -7,6 +7,8 @@ let communityPosts = [];
 let communityLikes = {};
 let communityFollows = {};
 let communityListener = null;
+let communitySupporters = {};
+let activeTournament = null;
 
 function escapeHtml(str) {
   return String(str)
@@ -25,6 +27,79 @@ function communityTimeAgo(ts) {
   return Math.floor(seconds / 86400) + 'd ago';
 }
 
+function communityWeekKey(date) {
+  const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = value.getUTCDay() || 7;
+  value.setUTCDate(value.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((value - yearStart) / 86400000) + 1) / 7);
+  return value.getUTCFullYear() + '-W' + String(week).padStart(2, '0');
+}
+
+function communityRenderLeaderboard(data, week) {
+  const container = document.getElementById('weekly-leaderboard');
+  const label = document.getElementById('leaderboard-week-label');
+  if (!container) return;
+  if (label) label.textContent = week;
+  const entries = data && typeof data === 'object' ? Object.keys(data).map(function(uid) {
+    return Object.assign({ uid: uid }, data[uid]);
+  }).filter(function(entry) { return entry && Number(entry.wins) > 0; }) : [];
+  entries.sort(function(a, b) { return Number(b.wins) - Number(a.wins) || String(a.username).localeCompare(String(b.username)); });
+  const top = entries.slice(0, 5);
+  if (!top.length) {
+    container.innerHTML = '<p class="leaderboard-empty">No wins recorded this week yet.</p>';
+    return;
+  }
+  container.innerHTML = top.map(function(entry, index) {
+    const mascot = window.FeltoraMascots ? window.FeltoraMascots.render(entry.avatar || 'marlow') : '';
+    const rank = entry.rank || (window.FeltoraAuth && window.FeltoraAuth.rankForXp
+      ? window.FeltoraAuth.rankForXp(entry.xp).name : 'Hustler');
+    return '<article class="leaderboard-player">'
+      + '<span class="leaderboard-avatar">' + mascot + '</span>'
+      + '<span class="leaderboard-rank">#' + (index + 1) + ' · ' + escapeHtml(rank) + '</span>'
+      + '<strong>' + escapeHtml(entry.username || 'Player') + '</strong>'
+      + '<small>' + Number(entry.wins) + (Number(entry.wins) === 1 ? ' win' : ' wins') + '</small>'
+      + '</article>';
+  }).join('');
+}
+
+function communityRenderTournament(tournament) {
+  const card = document.getElementById('tournament-card');
+  if (!card) return;
+  activeTournament = tournament && typeof tournament === 'object'
+    && typeof tournament.title === 'string' && typeof tournament.description === 'string'
+    ? tournament : null;
+  card.hidden = !activeTournament;
+  if (!activeTournament) return;
+  document.getElementById('tournament-title').textContent = activeTournament.title.slice(0, 80);
+  document.getElementById('tournament-description').textContent = activeTournament.description.slice(0, 500);
+  const ends = Date.parse(activeTournament.endsAt || '');
+  document.getElementById('tournament-ends').textContent = Number.isFinite(ends)
+    ? 'Ends ' + new Date(ends).toLocaleString() : '';
+  document.getElementById('tournament-join').disabled = typeof activeTournament.hostUid !== 'string'
+    || !activeTournament.hostUid;
+}
+
+function communityLoadExtras() {
+  if (!window.FeltoraFirebase) return;
+  const week = communityWeekKey(new Date());
+  window.FeltoraFirebase.get('/leaderboard/weekly/' + week).then(function(data) {
+    communityRenderLeaderboard(data, week);
+  }).catch(function(error) {
+    console.warn('Weekly leaderboard could not load:', error);
+    communityRenderLeaderboard(null, week);
+  });
+  window.FeltoraFirebase.get('/supporters').then(function(data) {
+    communitySupporters = data && typeof data === 'object' ? data : {};
+    communityRenderFeed();
+  }).catch(function(error) {
+    console.warn('Supporter badges could not load:', error);
+  });
+  window.FeltoraFirebase.get('/tournament/active').then(communityRenderTournament).catch(function(error) {
+    console.warn('Tournament announcement could not load:', error);
+  });
+}
+
 function communityApplyData(data) {
   const source = data && typeof data === 'object' ? data : {};
   const posts = source.posts && typeof source.posts === 'object' ? source.posts : {};
@@ -35,6 +110,7 @@ function communityApplyData(data) {
   communityLikes = source.likes && typeof source.likes === 'object' ? source.likes : {};
   communityFollows = source.follows && typeof source.follows === 'object' ? source.follows : {};
   communityRenderFeed();
+  communityLoadExtras();
 }
 
 function communityRefresh() {
@@ -52,14 +128,23 @@ function communityShowStatus(message) {
   status.hidden = !message;
 }
 
+function communityErrorMessage(error) {
+  const message = String(error && error.message || error || '');
+  if (/401.*permission denied|permission denied.*401|PERMISSION_DENIED/i.test(message)) {
+    return 'Firebase is denying Community reads. Publish firebase-rules.json to the Realtime Database configured for this app.';
+  }
+  return 'Community could not load. Check your connection and try again.';
+}
+
 function communityRequireAccount(action) {
   if (window.FeltoraAuth && window.FeltoraAuth.currentUser() && window.FeltoraAuth.uid()) return true;
-  const loginError = document.getElementById('login-error');
-  if (loginError) {
-    loginError.textContent = 'Sign in or create an account to ' + action + '.';
-    loginError.hidden = false;
+  const nudge = document.getElementById('community-auth-nudge');
+  const message = document.getElementById('community-auth-nudge-text');
+  if (message) message.textContent = 'Sign in to ' + action + '. You can keep browsing the feed as a guest.';
+  if (nudge) {
+    nudge.hidden = false;
+    nudge.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-  if (typeof showScreen === 'function') showScreen('auth');
   return false;
 }
 
@@ -103,17 +188,32 @@ function communityRenderFeed() {
       ? '<button class="feed-follow-btn' + (followed ? ' following' : '') + '" data-author-uid="' + escapeHtml(post.authorUid || '') + '" data-author="' + escapeHtml(post.author || '') + '" aria-pressed="' + followed + '">'
         + (followed ? 'Following' : '+ Follow') + '</button>'
       : '';
+    const supporter = communitySupporters[post.authorUid];
+    const supporterValid = supporter && Number(supporter.tier) > 0
+      && (!supporter.expiresAt || Number(supporter.expiresAt) > Date.now());
+    const supporterIcon = supporterValid
+      ? ['', '⭐', '🔥', '👻', '👑'][Math.min(4, Number(supporter.tier))]
+      : '';
+    const rankName = post.rank || (window.FeltoraAuth && window.FeltoraAuth.rankForXp
+      ? window.FeltoraAuth.rankForXp(post.xp).name : 'Hustler');
+    const challengeBtn = me && uid && post.authorUid && post.authorUid !== uid
+      ? '<button class="feed-challenge-btn" data-challenge-author="' + escapeHtml(post.author || '') + '">Challenge</button>'
+      : '';
 
     return '<article class="feed-card" data-id="' + escapeHtml(post.id) + '">'
       + '<div class="feed-card-top">'
       + '<span class="feed-type-badge feed-type-' + escapeHtml(post.type || 'chat') + '">' + label + '</span>'
-      + '<span class="feed-meta">' + escapeHtml(post.author || 'Player') + ' <span class="verified-badge" title="Registered player">&#x2714;</span> &middot; ' + communityTimeAgo(post.ts || Date.now()) + '</span>'
+      + '<span class="feed-meta">' + escapeHtml(post.author || 'Player') + ' <span class="verified-badge" title="Registered player">&#x2714;</span>'
+      + '<span class="community-rank-badge">' + escapeHtml(rankName) + '</span>'
+      + (supporterIcon ? '<span class="community-supporter-badge" title="FELTORA supporter">' + supporterIcon + '</span>' : '')
+      + ' &middot; ' + communityTimeAgo(post.ts || Date.now()) + '</span>'
       + deleteBtn
       + '</div>'
       + image
       + '<p class="feed-body">' + escapeHtml(post.body || '') + '</p>'
       + '<div class="feed-card-footer">'
       + followBtn
+      + challengeBtn
       + '<button class="feed-like-btn' + (liked ? ' liked' : '') + '" data-id="' + escapeHtml(post.id) + '" title="' + (me ? 'Like post' : 'Sign in to like') + '" aria-label="' + (me ? (liked ? 'Unlike post' : 'Like post') : 'Sign in to like') + '" aria-pressed="' + liked + '">'
       + heart + ' <span>' + Object.keys(likes).length + '</span>'
       + '</button>'
@@ -132,6 +232,8 @@ async function communityPost(body, type, image) {
     authorUid: uid,
     author: me,
     body: body.trim().slice(0, 280),
+    xp: (window.FeltoraAuth.getAccount(me) || {}).xp || 0,
+    rank: (window.FeltoraAuth.rankForXp((window.FeltoraAuth.getAccount(me) || {}).xp || 0)).name,
     type: type,
     ts: Date.now()
   };
@@ -143,9 +245,33 @@ async function communityPost(body, type, image) {
   return true;
 }
 
+async function communityRecordWin() {
+  const auth = window.FeltoraAuth;
+  const firebase = window.FeltoraFirebase;
+  const username = auth && auth.currentUser();
+  const uid = auth && auth.uid();
+  if (!username || !uid || !firebase) return false;
+  const account = auth.getAccount(username) || {};
+  const week = communityWeekKey(new Date());
+  const path = '/leaderboard/weekly/' + week + '/' + encodeURIComponent(uid);
+  const existing = await firebase.get(path);
+  const entry = {
+    username: username,
+    avatar: account.avatar || 'marlow',
+    xp: Number(account.xp) || 0,
+    rank: auth.rankForXp(Number(account.xp) || 0).name,
+    wins: Math.max(0, Number(existing && existing.wins) || 0) + 1,
+    updatedAt: Date.now()
+  };
+  await firebase.set(path, entry);
+  communityLoadExtras();
+  return true;
+}
+
 window.FeltoraCommunity = {
   refresh: communityRefresh,
-  getPosts: function() { return communityPosts.slice(); }
+  getPosts: function() { return communityPosts.slice(); },
+  recordWin: communityRecordWin
 };
 
 const communityFeed = document.getElementById('community-feed');
@@ -153,9 +279,11 @@ communityFeed.addEventListener('click', async function(event) {
   const likeBtn = event.target.closest('.feed-like-btn');
   const delBtn = event.target.closest('.feed-delete');
   const followBtn = event.target.closest('.feed-follow-btn');
-  if (!likeBtn && !delBtn && !followBtn) return;
+  const challengeBtn = event.target.closest('.feed-challenge-btn');
+  const tournamentJoin = event.target.closest('#tournament-join');
+  if (!likeBtn && !delBtn && !followBtn && !challengeBtn && !tournamentJoin) return;
 
-  if (!communityRequireAccount('interact with the community')) return;
+  if (!communityRequireAccount(challengeBtn ? 'challenge another player' : tournamentJoin ? 'join the tournament' : 'interact with the community')) return;
   const uid = window.FeltoraAuth.uid();
   const firebase = window.FeltoraFirebase;
   try {
@@ -177,13 +305,46 @@ communityFeed.addEventListener('click', async function(event) {
         await firebase.set(path, true);
         if (window.FeltoraPhone) window.FeltoraPhone.addFriend(followBtn.dataset.author);
       }
+    } else if (challengeBtn) {
+      const username = challengeBtn.dataset.challengeAuthor;
+      if (!username || username === window.FeltoraAuth.currentUser()) return;
+      await firebase.sendDM(username, {
+        from: window.FeltoraAuth.currentUser(),
+        text: '⚡ ' + window.FeltoraAuth.currentUser() + ' challenges you to a game!',
+        ts: Date.now()
+      });
+      communityShowStatus('Game challenge sent to @' + username + '.');
+    } else if (tournamentJoin && activeTournament && activeTournament.hostUid) {
+      if (activeTournament.hostUid === uid) {
+        communityShowStatus('You are hosting this tournament.');
+        return;
+      }
+      const host = await firebase.get('/profiles/' + encodeURIComponent(activeTournament.hostUid));
+      if (!host || typeof host.username !== 'string') throw new Error('Tournament host profile is unavailable.');
+      await firebase.sendDM(host.username, {
+        from: window.FeltoraAuth.currentUser(),
+        text: '⚡ ' + window.FeltoraAuth.currentUser() + ' would like to join "' + activeTournament.title.slice(0, 80) + '".',
+        ts: Date.now()
+      });
+      communityShowStatus('Message sent to the tournament host.');
     }
-    await communityRefresh();
-    communityShowStatus('');
+    if (!challengeBtn && !tournamentJoin) {
+      await communityRefresh();
+      communityShowStatus('');
+    }
   } catch (error) {
     console.error('Community action failed:', error);
     communityShowStatus('That action could not be saved. Check your connection and try again.');
   }
+});
+
+document.getElementById('community-auth-signin').addEventListener('click', function() {
+  document.getElementById('community-auth-nudge').hidden = true;
+  if (typeof showScreen === 'function') showScreen('auth');
+});
+
+document.getElementById('community-auth-dismiss').addEventListener('click', function() {
+  document.getElementById('community-auth-nudge').hidden = true;
 });
 
 document.querySelectorAll('.community-tab').forEach(function(btn) {
@@ -271,6 +432,7 @@ if (communityResultBtn) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  communityLoadExtras();
   if (!window.FeltoraFirebase) {
     communityShowStatus('Community could not connect. Please try again later.');
     return;
@@ -279,11 +441,11 @@ document.addEventListener('DOMContentLoaded', function() {
   communityListener = window.FeltoraFirebase.listen('/community', function() {
     communityRefresh().catch(function(error) {
       console.error('Community refresh failed:', error);
-      communityShowStatus('Community could not refresh. Check your connection.');
+      communityShowStatus(communityErrorMessage(error));
     });
   });
   communityRefresh().catch(function(error) {
     console.error('Community load failed:', error);
-    communityShowStatus('Community could not load. Check your connection and try again.');
+    communityShowStatus(communityErrorMessage(error));
   });
 });

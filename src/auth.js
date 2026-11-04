@@ -7,6 +7,13 @@ const Auth = (() => {
   const SESSION_KEY = 'feltora-session';
   const CLOUD_SESSION_KEY = 'feltora-cloud-session';
   const GOOGLE_SESSION_KEY = 'feltora-google-session';
+  const RANKS = [
+    { name: 'Hustler', min: 0, max: 499 },
+    { name: 'Shark', min: 500, max: 1499 },
+    { name: 'Assassin', min: 1500, max: 3999 },
+    { name: 'Legend', min: 4000, max: 7999 },
+    { name: 'Ghost', min: 8000, max: Infinity }
+  ];
   let firebaseAuthInstance = null;
   let firebaseAuthInitPromise = null;
   let firebaseAuthStateReady = null;
@@ -157,6 +164,7 @@ const Auth = (() => {
 
     saveGoogleSession(user, profile.username);
     storeAccount(profile.username, profile, getAccount(profile.username));
+    syncAccountProfile(profile.username);
     pendingGoogleUser = null;
     return { ok: true, username: profile.username };
   }
@@ -213,14 +221,62 @@ const Auth = (() => {
       avatar: account.avatar,
       cue: account.cue,
       felt: account.felt,
+      ballSkin: account.ballSkin || 'classic',
       title: account.title,
-      vibe: account.vibe
+      customTitle: account.customTitle || '',
+      vibe: account.vibe,
+      stats: account.stats || { wins: 0, losses: 0, frames: 0 },
+      xp: account.xp || 0,
+      dailyStreak: account.dailyStreak || 0,
+      lastPlayedDate: account.lastPlayedDate || '',
+      winStreak: account.winStreak || 0,
+      sessionId: account.sessionId || '',
+      points: account.points || { today: 0, total: 0, lastReset: '' },
+      unlocks: account.unlocks || {
+        cues: ['wood', 'carbon', 'ivory', 'black', 'gold', 'chrome', 'crimson'],
+        felts: ['green', 'blue', 'burgundy', 'slate', 'sand'],
+        balls: [],
+        mascots: ['marlow', 'ivy', 'rook', 'pip'],
+        titles: [],
+        tipTier: 0
+      },
+      equipped: account.equipped || {},
+      supporter: account.supporter || null
     };
+  }
+
+  function syncAccountProfile(username) {
+    const account = getAccount(username);
+    if (account && Auth && typeof Auth.update === 'function') Auth.update(localProfile(account));
+  }
+
+  function rankForXp(xp) {
+    const total = Math.max(0, Number(xp) || 0);
+    return RANKS.find((rank) => total <= rank.max) || RANKS[RANKS.length - 1];
   }
 
   function storeAccount(username, profile, existing) {
     const accounts = load();
-    const account = Object.assign({}, profile || {}, existing || {}, {
+    const account = Object.assign({
+      ballSkin: 'classic',
+      customTitle: '',
+      xp: 0,
+      dailyStreak: 0,
+      lastPlayedDate: '',
+      winStreak: 0,
+      sessionId: '',
+      points: { today: 0, total: 0, lastReset: '' },
+      unlocks: {
+        cues: ['wood', 'carbon', 'ivory', 'black', 'gold', 'chrome', 'crimson'],
+        felts: ['green', 'blue', 'burgundy', 'slate', 'sand'],
+        balls: [],
+        mascots: ['marlow', 'ivy', 'rook', 'pip'],
+        titles: [],
+        tipTier: 0
+      },
+      equipped: {},
+      supporter: null
+    }, existing || {}, profile || {}, {
       username,
       stats: (existing && existing.stats) || (profile && profile.stats) || { wins: 0, losses: 0, frames: 0 }
     });
@@ -303,7 +359,16 @@ const Auth = (() => {
         const result = await auth.signInWithPopup(provider);
         return await resolveGoogleUser(result.user);
       } catch (error) {
-        return { ok: false, error: error.message || 'Google sign-in failed.' };
+        const messages = {
+          'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
+          'auth/unauthorized-domain': 'This site is not authorized for Google sign-in. Add its hostname to Firebase Authentication authorized domains.',
+          'auth/popup-blocked': 'The browser blocked the Google sign-in popup. Allow popups and try again.',
+          'auth/network-request-failed': 'Google sign-in could not reach Firebase. Check your connection and try again.'
+        };
+        const code = error && typeof error === 'object' ? error.code : '';
+        const detail = error && typeof error.message === 'string' ? error.message : '';
+        console.error('Google sign-in failed:', code || detail || 'unknown error');
+        return { ok: false, error: messages[code] || detail || 'Google sign-in failed.' };
       }
     },
 
@@ -319,6 +384,7 @@ const Auth = (() => {
         });
         saveGoogleSession(user, result.username);
         storeAccount(result.username, result.profile, getAccount(result.username));
+        syncAccountProfile(result.username);
         pendingGoogleUser = null;
         return { ok: true, username: result.username };
       } catch (error) {
@@ -404,6 +470,7 @@ const Auth = (() => {
         const tokenResult = await exchangeCustomToken(authResult.customToken);
         storeAccount(u, authResult.profile, existing);
         saveTokenSession(tokenResult, authResult);
+        syncAccountProfile(u);
         return { ok: true };
       } catch (error) {
         return { ok: false, error: error.message || 'Account creation failed.' };
@@ -422,6 +489,7 @@ const Auth = (() => {
         const preserveLocal = !local || !local.pinHash || local.pinHash === hash(pin);
         storeAccount(u, authResult.profile, preserveLocal ? local : null);
         saveTokenSession(tokenResult, authResult);
+        syncAccountProfile(u);
         return { ok: true };
       } catch (error) {
         const accounts = load();
@@ -486,7 +554,7 @@ const Auth = (() => {
 
     update(fields) {
       const username = this.currentUser();
-      if (!username) return;
+      if (!username || !fields || typeof fields !== 'object') return;
       const accounts = load();
       if (!accounts[username]) return;
       Object.assign(accounts[username], fields);
@@ -495,11 +563,26 @@ const Auth = (() => {
         return;
       }
 
-      const profile = localProfile(accounts[username]);
       if (window.FeltoraFirebase && window.FeltoraFirebase.update) {
-        window.FeltoraFirebase.update('/profiles/' + this.uid(), profile)
-          .catch((error) => console.error('Profile sync failed:', error));
+        const cloudPatch = {};
+        Object.keys(fields).forEach((key) => {
+          if (key === 'supporter' || key === 'supporterTier' || key === 'stats') return;
+          if (key === 'unlocks' && fields.unlocks && typeof fields.unlocks === 'object') {
+            ['cues', 'felts', 'balls', 'mascots', 'titles'].forEach((category) => {
+              if (Array.isArray(fields.unlocks[category])) {
+                cloudPatch['unlocks/' + category] = fields.unlocks[category];
+              }
+            });
+            return;
+          }
+          cloudPatch[key] = fields[key];
+        });
+        if (Object.keys(cloudPatch).length) {
+          window.FeltoraFirebase.update('/profiles/' + this.uid(), cloudPatch)
+            .catch((error) => console.error('Profile sync failed:', error));
+        }
       }
+      return accounts[username];
     },
 
     recordResult(won) {
@@ -509,7 +592,15 @@ const Auth = (() => {
       if (!accounts[username]) return;
       accounts[username].stats.frames++;
       if (won) accounts[username].stats.wins++; else accounts[username].stats.losses++;
-      if (!save(accounts)) console.error('Game result could not be saved on this device.');
+      if (!save(accounts)) {
+        console.error('Game result could not be saved on this device.');
+      }
+    },
+
+    rankForXp,
+
+    getProfile(username) {
+      return getAccount(username);
     }
   };
 })();

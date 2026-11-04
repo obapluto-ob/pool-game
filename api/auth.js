@@ -97,8 +97,23 @@ async function hashPin(pin, salt) {
   return derived.toString('hex');
 }
 
+function boundedCount(value, fallback, max) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(max, Math.floor(number))) : fallback;
+}
+
+function cosmeticIds(value, fallback) {
+  return Array.isArray(value)
+    ? value.filter((id) => typeof id === 'string' && /^[a-z0-9_-]{1,32}$/.test(id)).slice(0, 100)
+    : fallback;
+}
+
 function publicProfile(username, input) {
   const source = input && typeof input === 'object' ? input : {};
+  const today = new Date().toISOString().slice(0, 10);
+  const pointsInput = source.points && typeof source.points === 'object' ? source.points : {};
+  const unlocksInput = source.unlocks && typeof source.unlocks === 'object' ? source.unlocks : {};
+  const statsInput = source.stats && typeof source.stats === 'object' ? source.stats : {};
   const displayName = typeof source.displayName === 'string'
     ? source.displayName.trim().replace(/[<>]/g, '').slice(0, 24)
     : '';
@@ -111,8 +126,33 @@ function publicProfile(username, input) {
     felt: /^[a-z0-9_-]{1,24}$/.test(source.felt || '') ? source.felt : 'green',
     title: typeof source.title === 'string' ? source.title.slice(0, 32) : 'The Hustler',
     vibe: /^[a-z0-9_-]{1,24}$/.test(source.vibe || '') ? source.vibe : 'aggressive',
+    ballSkin: /^[a-z0-9_-]{1,32}$/.test(source.ballSkin || '') ? source.ballSkin : 'classic',
+    customTitle: typeof source.customTitle === 'string' ? source.customTitle.trim().slice(0, 20) : '',
+    xp: boundedCount(source.xp, 0, 1000000000),
+    dailyStreak: boundedCount(source.dailyStreak, 0, 1000000),
+    lastPlayedDate: /^\d{4}-\d{2}-\d{2}$/.test(source.lastPlayedDate || '') ? source.lastPlayedDate : '',
+    winStreak: boundedCount(source.winStreak, 0, 1000000),
+    sessionId: typeof source.sessionId === 'string' ? source.sessionId.slice(0, 80) : '',
+    points: {
+      today: pointsInput.lastReset === today ? boundedCount(pointsInput.today, 0, 1000000000) : 0,
+      total: boundedCount(pointsInput.total, 0, 1000000000),
+      lastReset: today
+    },
+    unlocks: {
+      cues: cosmeticIds(unlocksInput.cues, ['wood', 'carbon', 'ivory', 'black', 'gold', 'chrome', 'crimson']),
+      felts: cosmeticIds(unlocksInput.felts, ['green', 'blue', 'burgundy', 'slate', 'sand']),
+      balls: cosmeticIds(unlocksInput.balls, []),
+      mascots: cosmeticIds(unlocksInput.mascots, ['marlow', 'ivy', 'rook', 'pip']),
+      titles: cosmeticIds(unlocksInput.titles, []),
+      tipTier: 0
+    },
+    equipped: source.equipped && typeof source.equipped === 'object' ? source.equipped : {},
     createdAt: Date.now(),
-    stats: { wins: 0, losses: 0, frames: 0 }
+    stats: {
+      wins: boundedCount(statsInput.wins, 0, 1000000000),
+      losses: boundedCount(statsInput.losses, 0, 1000000000),
+      frames: boundedCount(statsInput.frames, 0, 1000000000)
+    }
   };
 }
 

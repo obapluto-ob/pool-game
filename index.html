@@ -15,12 +15,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261107-v6">
+  <link rel="stylesheet" href="css/styles.css?v=20261107-v8">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
 <body data-theme="dark">
   <div class="app">
+
+    <div class="rank-up-overlay" id="rank-up-overlay" hidden>
+      <div class="rank-up-card" role="dialog" aria-modal="true" aria-labelledby="rank-up-title">
+        <span class="rank-up-kicker">RANK PROMOTION</span>
+        <h2 id="rank-up-title">New rank</h2>
+        <p>Your practice is paying off. Keep playing at your pace.</p>
+        <button type="button" id="rank-up-continue">Continue</button>
+      </div>
+    </div>
 
     <!-- ── AUTH SCREEN ─────────────────────────────────────────── -->
     <section class="screen auth-screen active" id="auth-screen">
@@ -34,6 +43,7 @@
         <span class="auth-ball" style="--bx:8%;--by:70%;--bd:10s;--bs:1.0;--bc:#00e5a0">●</span>
         <span class="auth-ball" style="--bx:70%;--by:88%;--bd:13s;--bs:0.75;--bc:#f0b429">●</span>
       </div>
+
       <div class="auth-shell">
         <div class="auth-brand">
           <div class="auth-logo-wrap">
@@ -138,8 +148,14 @@
             <div class="avatar" aria-hidden="true"><span class="avatar-mark" data-avatar-display="profile"></span></div>
             <div class="name-wrap">
               <strong id="profile-name">Player One</strong>
+              <span class="supporter-badge" id="lobby-supporter-badge" hidden></span>
               <span id="profile-account-tag">Guest</span>
               <span id="profile-mascot-title">Marlow · The Host</span>
+              <div class="lobby-progression">
+                <div class="lobby-rank-row"><strong id="lobby-rank">Hustler</strong><span id="lobby-xp-label">0 / 500 XP</span></div>
+                <div class="xp-track" role="progressbar" id="lobby-xp-bar" aria-label="Rank progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="lobby-xp-fill"></span></div>
+                <div class="lobby-earnings-row"><span id="lobby-streak">Day 0</span><span id="lobby-points">0 pts today</span></div>
+              </div>
             </div>
           </div>
 
@@ -272,10 +288,6 @@
             <button class="mode-btn primary" id="play-bot" type="button" aria-expanded="false" aria-controls="bot-config">
               <span>Play vs Bot</span>
               <span class="meta">🤖</span>
-            </button>
-            <button class="mode-btn" id="how-to-play-btn" type="button" style="display:none" aria-hidden="true">
-              <span>How to Play</span>
-              <span class="meta">?</span>
             </button>
           </div>
 
@@ -495,7 +507,7 @@
       <div id="onboarding-card">
         <div id="ob-topbar">
           <button id="ob-back" class="ob-back-btn" type="button" hidden>&#x2190; Back</button>
-          <div id="onboarding-progress">
+          <div id="onboarding-progress" role="group" aria-label="Profile setup progress">
             <span class="ob-dot active" data-step="0"></span>
             <span class="ob-dot" data-step="1"></span>
             <span class="ob-dot" data-step="2"></span>
@@ -632,6 +644,28 @@
           </div>
         </header>
         <p id="community-status" class="community-status" role="status" aria-live="polite" hidden></p>
+        <div id="community-auth-nudge" class="community-auth-nudge" role="status" aria-live="polite" hidden>
+          <p id="community-auth-nudge-text">Sign in to join the conversation.</p>
+          <div class="community-auth-nudge-actions">
+            <button id="community-auth-signin" class="action-btn primary" type="button">Sign in</button>
+            <button id="community-auth-dismiss" class="ghost-btn" type="button" aria-label="Dismiss sign-in reminder">Not now</button>
+          </div>
+        </div>
+        <section class="community-leaderboard" aria-labelledby="weekly-leaderboard-title">
+          <div class="community-section-heading">
+            <div><h3 id="weekly-leaderboard-title">Weekly leaders</h3><span>Most wins this week</span></div>
+            <span class="leaderboard-week" id="leaderboard-week-label"></span>
+          </div>
+          <div id="weekly-leaderboard" class="weekly-leaderboard" aria-live="polite">
+            <p class="leaderboard-empty">Loading this week’s leaders…</p>
+          </div>
+        </section>
+        <section id="tournament-card" class="tournament-card" hidden aria-live="polite">
+          <span class="tournament-kicker">CLUBHOUSE TOURNAMENT</span>
+          <h3 id="tournament-title"></h3>
+          <p id="tournament-description"></p>
+          <div class="tournament-footer"><span id="tournament-ends"></span><button type="button" id="tournament-join">Message host</button></div>
+        </section>
 
         <!-- Phone mockup view -->
         <div id="community-phone-view" hidden>
@@ -682,6 +716,10 @@
                     <button class="phone-app-icon" data-open="mpesa" aria-label="M-Pesa">
                       <span class="pai-art pai-mpesa">M</span>
                       <span>M-Pesa</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="store" aria-label="Store">
+                      <span class="pai-art pai-store">✦</span>
+                      <span>Store</span>
                     </button>
                     <button class="phone-app-icon" data-open="weather" aria-label="Weather">
                       <span class="pai-art pai-weather">&#x26C5;</span>
@@ -749,14 +787,24 @@
                   </div>
                 </div>
 
-                <!-- Dummy apps -->
+                <!-- Messages -->
                 <div class="phone-view" id="phone-messages">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Messages</span><span></span></div>
                   <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F4AC; No messages yet.<br><small>Challenge a friend to FELTORA!</small></p></div>
                 </div>
                 <div class="phone-view" id="phone-camera">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Camera</span><span></span></div>
-                  <div class="phone-dummy-app phone-camera-view"><div class="phone-camera-lens"></div><p style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin-top:8px">Tap to capture your win</p></div>
+                  <div class="phone-camera-workspace">
+                    <div class="phone-camera-preview">
+                      <video id="phone-camera-video" autoplay playsinline muted></video>
+                      <p id="phone-camera-placeholder">Turn on your camera to take a photo. Camera access is only used after you tap the button.</p>
+                    </div>
+                    <p class="phone-camera-status" id="phone-camera-status" role="status" aria-live="polite"></p>
+                    <div class="phone-camera-actions">
+                      <button class="phone-camera-start" id="phone-camera-start" type="button">Turn camera on</button>
+                      <button class="phone-camera-capture" id="phone-camera-capture" type="button" disabled>Capture</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="phone-view" id="phone-music">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Music</span><span></span></div>
@@ -764,7 +812,7 @@
                 </div>
                 <div class="phone-view" id="phone-gallery">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Gallery</span><span></span></div>
-                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F5BC;&#xFE0F; Win screenshots<br><small>Share wins to see them here</small></p></div>
+                  <div id="phone-gallery-grid" class="phone-gallery-grid"></div>
                 </div>
 
                 <!-- Settings app (real toggles) -->
@@ -825,17 +873,28 @@
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">M-Pesa</span><span></span></div>
                   <div style="flex:1;background:#00a550;display:flex;flex-direction:column;align-items:center;padding:16px 12px;gap:10px;overflow-y:auto;">
                     <div style="font:700 1.1rem/1 system-ui,sans-serif;color:#fff;letter-spacing:0.04em;">M-PESA</div>
-                    <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:12px 16px;width:100%;text-align:center;">
-                      <div style="font-size:0.62rem;color:rgba(255,255,255,0.7);">Balance</div>
-                      <div style="font:800 1.4rem/1.2 system-ui,sans-serif;color:#fff;margin:4px 0;">KES 4,200.00</div>
-                      <div style="font-size:0.58rem;color:rgba(255,255,255,0.5);">Available balance</div>
+                    <div class="mpesa-not-connected">
+                      <strong>Payment service not connected</strong>
+                      <span>No balance or transactions are real in this preview. Safaricom M-PESA integration is not configured.</span>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
-                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:1.1rem;">&#x1F4E4;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Send Money</div></div>
-                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:1.1rem;">&#x1F4E5;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Receive</div></div>
-                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:1.1rem;">&#x1F3E6;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Bank</div></div>
-                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;"><div style="font-size:1.1rem;">&#x1F4F1;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Buy Airtime</div></div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;opacity:0.65;"><div style="font-size:1.1rem;">&#x1F4E4;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Send Money</div></div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;opacity:0.65;"><div style="font-size:1.1rem;">&#x1F4E5;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Receive</div></div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;opacity:0.65;"><div style="font-size:1.1rem;">&#x1F3E6;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Bank</div></div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;opacity:0.65;"><div style="font-size:1.1rem;">&#x1F4F1;</div><div style="font-size:0.6rem;color:#fff;margin-top:3px;">Buy Airtime</div></div>
                     </div>
+                  </div>
+                </div>
+
+                <!-- Weather app -->
+                <div class="phone-view" id="phone-store">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">FELTORA Store</span><span></span></div>
+                  <div class="store-balance">Today's points <strong id="store-points">0</strong></div>
+                  <div id="store-tabs" class="store-tabs" role="tablist" aria-label="Cosmetic categories"></div>
+                  <div id="store-grid" class="store-grid"></div>
+                  <div id="store-custom-title" class="store-custom-title" hidden>
+                    <label for="store-custom-title-input">Custom title (up to 20 characters)</label>
+                    <div><input id="store-custom-title-input" maxlength="20"><button type="button" id="store-custom-title-save">Save</button></div>
                   </div>
                 </div>
 
@@ -843,9 +902,10 @@
                 <div class="phone-view" id="phone-weather">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Weather</span><span></span></div>
                   <div style="flex:1;background:linear-gradient(160deg,#1a3a5c,#0d1f33);display:flex;flex-direction:column;align-items:center;padding:20px 12px;gap:8px;">
-                    <div style="font-size:0.7rem;color:rgba(255,255,255,0.6);">Nairobi, Kenya</div>
+                    <div id="phone-weather-location" style="font-size:0.7rem;color:rgba(255,255,255,0.6);">Nairobi, Kenya</div>
                     <div id="phone-weather-widget" style="font:400 0.9rem/1.5 system-ui,sans-serif;color:#fff;text-align:center;">&#x1F324; Loading&#x2026;</div>
-                    <div style="font-size:0.62rem;color:rgba(255,255,255,0.4);margin-top:8px;">Live weather via Open-Meteo</div>
+                    <button id="phone-weather-locate" type="button" class="phone-weather-locate">Use my location</button>
+                    <div id="phone-weather-status" style="font-size:0.62rem;color:rgba(255,255,255,0.55);text-align:center;line-height:1.45;" role="status" aria-live="polite">Live weather via Open-Meteo.</div>
                   </div>
                 </div>
 
@@ -853,10 +913,13 @@
                 <div class="phone-view" id="phone-browser">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Browser</span><span></span></div>
                   <div class="phone-browser-bar">
-                    <input id="phone-browser-url" class="phone-browser-input" type="text" placeholder="Search or enter URL..." value="https://duckduckgo.com/?kae=d">
+                    <input id="phone-browser-url" class="phone-browser-input" type="text" placeholder="Search or enter URL..." value="https://html.duckduckgo.com/html/?q=pool">
                     <button id="phone-browser-go" class="phone-browser-go">Go</button>
                   </div>
-                  <iframe id="phone-browser-frame" class="phone-browser-frame" src="https://duckduckgo.com/?kae=d" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy"></iframe>
+                  <a id="phone-browser-open" class="phone-browser-open" href="https://html.duckduckgo.com/html/?q=pool" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+                  <div id="phone-browser-frame" class="phone-browser-message" role="status" aria-live="polite">
+                    Search the web or enter a URL. External sites open in a new tab because they block in-app embedding.
+                  </div>
                 </div>
 
                 <!-- Orion AI app -->
@@ -867,6 +930,10 @@
                     <span style="font-size:0.58rem;color:var(--accent);">by FELTORA</span>
                   </div>
                   <div id="orion-messages" class="orion-messages"></div>
+                  <div id="orion-limit" class="orion-limit" hidden>
+                    <p>You've used your 10 free messages today. Tip any amount to unlock unlimited Orion access.</p>
+                    <button id="orion-tip-button" type="button">Tip the developer</button>
+                  </div>
                   <div class="orion-input-row">
                     <input id="orion-input" class="orion-input" type="text" placeholder="Ask Orion anything..." maxlength="300">
                     <button id="orion-send" class="orion-send-btn">&#x27A4;</button>
@@ -1045,6 +1112,18 @@
         <h2 id="winner-name">Player 1</h2>
         <p class="results-outcome" id="results-outcome">Player 1 takes the frame.</p>
         <p id="winner-summary">Matches are won by pocketing the 8-ball on the final shot.</p>
+        <p id="loss-context" class="loss-context" hidden></p>
+        <div class="results-progression" id="results-progression" hidden>
+          <div class="results-xp-copy"><strong id="results-xp-gained">+0 XP</strong><span id="results-rank-copy">Hustler</span></div>
+          <div class="xp-track"><span id="results-xp-fill"></span></div>
+          <small id="results-xp-progress"></small>
+          <small id="results-streak"></small>
+        </div>
+        <aside class="results-tip-prompt" id="results-tip-prompt" hidden>
+          <span>You're on a 3-game win streak. Enjoying FELTORA? Support development if you like.</span>
+          <button type="button" id="results-tip-button">Tip the developer</button>
+          <button type="button" class="results-tip-dismiss" id="results-tip-dismiss" aria-label="Dismiss">Not now</button>
+        </aside>
 
         <div class="results-stats">
           <div class="stat-box">
@@ -1095,15 +1174,16 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261107-v6" defer></script>
+  <script src="src/auth.js?v=20261107-v8" defer></script>
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>
-  <script src="src/game.js?v=20261107-v6" defer></script>
-  <script src="src/community.js?v=20261107-v5" defer></script>
-  <script src="src/onboarding.js?v=20261107-v5" defer></script>
-  <script src="src/firebase.js?v=20261107-v5" defer></script>
-  <script src="src/phone.js?v=20261107-v5" defer></script>
+  <script src="src/game.js?v=20261107-v10" defer></script>
+  <script src="src/community.js?v=20261107-v10" defer></script>
+  <script src="src/onboarding.js?v=20261107-v9" defer></script>
+  <script src="src/firebase.js?v=20261107-v6" defer></script>
+  <script src="src/store.js?v=20261107-v2" defer></script>
+  <script src="src/phone.js?v=20261107-v10" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

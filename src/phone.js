@@ -3,7 +3,7 @@
   var phoneOpen = false;
   var batteryLevel = 100;
   var batteryCharging = false;
-  var weatherData = { temp: '--', desc: 'Nairobi', icon: '🌤' };
+  var weatherData = { temp: '--', desc: 'Loading weather', icon: '🌤', place: 'Nairobi, Kenya' };
   var radioPlaying = false;
   var radioAudio = null;
   var currentStation = null;
@@ -222,21 +222,60 @@
   }
 
   // ── Weather ──────────────────────────────────────────────────────
-  function fetchWeather() {
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=-1.2921&longitude=36.8219&current_weather=true&temperature_unit=celsius')
-      .then(function(r) { return r.json(); })
+  function fetchWeather(latitude, longitude, place) {
+    var lat = typeof latitude === 'number' ? latitude : -1.2921;
+    var lon = typeof longitude === 'number' ? longitude : 36.8219;
+    var location = place || 'Nairobi, Kenya';
+    var status = document.getElementById('phone-weather-status');
+    weatherData = { temp: '--', desc: 'Loading weather', icon: '🌤', place: location };
+    if (status) status.textContent = 'Loading current conditions…';
+    updateWeatherWidget();
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + encodeURIComponent(lat) + '&longitude=' + encodeURIComponent(lon) + '&current_weather=true&temperature_unit=celsius')
+      .then(function(r) {
+        if (!r.ok) throw new Error('Weather service returned HTTP ' + r.status);
+        return r.json();
+      })
       .then(function(d) {
+        if (!d.current_weather || typeof d.current_weather.temperature !== 'number') {
+          throw new Error('Weather service response did not include current conditions');
+        }
         var temp = Math.round(d.current_weather.temperature);
         var code = d.current_weather.weathercode;
         var icon = code <= 1 ? '☀️' : code <= 3 ? '⛅' : code <= 67 ? '🌧' : '🌩';
-        weatherData = { temp: temp + '°C', desc: 'Nairobi', icon: icon };
+        weatherData = { temp: temp + '°C', desc: 'Current conditions', icon: icon, place: location };
+        if (status) status.textContent = 'Live weather via Open-Meteo.';
         updateWeatherWidget();
-      }).catch(function() {});
+      }).catch(function(error) {
+        weatherData = { temp: '--', desc: 'Weather unavailable', icon: '—', place: location };
+        if (status) status.textContent = 'Could not load weather. Check your connection and try again.';
+        updateWeatherWidget();
+        console.warn('Weather load failed:', error);
+      });
+  }
+
+  function fetchLocalWeather() {
+    var status = document.getElementById('phone-weather-status');
+    if (!navigator.geolocation) {
+      if (status) status.textContent = 'Location is not supported by this browser.';
+      return;
+    }
+    if (status) status.textContent = 'Waiting for location permission…';
+    navigator.geolocation.getCurrentPosition(function(position) {
+      fetchWeather(position.coords.latitude, position.coords.longitude, 'Your location');
+    }, function(error) {
+      if (status) {
+        status.textContent = error.code === error.PERMISSION_DENIED
+          ? 'Location permission was denied. Weather is still available for Nairobi.'
+          : 'Could not get your location. Weather is still available for Nairobi.';
+      }
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   }
 
   function updateWeatherWidget() {
     var el = document.getElementById('phone-weather-widget');
     if (el) el.innerHTML = weatherData.icon + ' <strong>' + weatherData.temp + '</strong> ' + weatherData.desc;
+    var place = document.getElementById('phone-weather-location');
+    if (place) place.textContent = weatherData.place;
   }
 
   function updateStatusBar() {
@@ -290,10 +329,20 @@
 
   function buildRadioList() {
     var list = document.getElementById('radio-stations-list');
-    if (!list || list.children.length) return;
-    list.innerHTML = KENYA_STATIONS.map(function(s) {
-      return '<button class="radio-station-btn" data-name="' + s.name + '" data-url="' + s.url + '">' + s.emoji + ' ' + s.name + '</button>';
+    if (!list) return;
+    var entitled = window.FeltoraStore && window.FeltoraStore.hasTipTier
+      ? window.FeltoraStore.hasTipTier(currentPhoneProfile()) : false;
+    list.innerHTML = KENYA_STATIONS.map(function(s, index) {
+      var locked = index > 1 && !entitled;
+      return '<button class="radio-station-btn' + (locked ? ' locked' : '') + '" data-name="' + s.name + '" data-url="' + s.url + '" data-locked="' + locked + '">'
+        + s.emoji + ' ' + s.name + (locked ? ' · 🔒' : '') + '</button>';
     }).join('');
+  }
+
+  function currentPhoneProfile() {
+    var auth = window.FeltoraAuth;
+    var username = auth && auth.currentUser();
+    return username && auth.getAccount(username);
   }
 
 
@@ -307,6 +356,7 @@
   var REACTIONS_KEY= 'feltora-reactions';
   var ONLINE_KEY   = 'feltora-online';
   var MSG_CAP      = 100; // max DMs per conversation
+  var ORION_USAGE_KEY = 'feltora-orion-daily-usage';
 
   // localStorage safe write — warns user if storage is full
   function lsSet(key, val) {
@@ -530,7 +580,8 @@
     if (!el) return;
     var div = document.createElement('div');
     div.className = 'orion-msg ' + role;
-    div.innerHTML = '<span class="orion-msg-label">' + (role === 'user' ? 'You' : '✨ Orion') + '</span>'
+    var label = role === 'user' ? 'You' : role === 'system' ? 'Notice' : '✨ Orion';
+    div.innerHTML = '<span class="orion-msg-label">' + label + '</span>'
       + '<p>' + text.replace(/</g,'&lt;') + '</p>';
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
@@ -539,9 +590,22 @@
   function orionSend() {
     var input = document.getElementById('orion-input');
     if (!input || !input.value.trim()) return;
+    var profile = currentPhoneProfile();
+    var unlimited = window.FeltoraStore && window.FeltoraStore.hasTipTier
+      ? window.FeltoraStore.hasTipTier(profile) : false;
+    var usage = readOrionUsage();
+    if (!unlimited && usage.count >= 10) {
+      showOrionLimit();
+      return;
+    }
     var text = input.value.trim();
     input.value = '';
     if (isAbusive(text)) { orionAddMessage('system', '⚠️ Please keep it respectful.'); return; }
+    if (!unlimited) {
+      usage.count++;
+      writeOrionUsage(usage);
+      updateOrionLimit();
+    }
     orionAddMessage('user', text);
     orionHistory.push({ role: 'user', content: text });
     saveOrionHistory(orionHistory);
@@ -554,27 +618,62 @@
       .concat(orionHistory.slice(-8));
     var prompt = messages.map(function(m) { return m.role + ': ' + m.content; }).join('\n');
     var apiUrl = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=openai&seed=' + Math.floor(Math.random()*9999);
-    fetch(apiUrl).then(function(r) { return r.text(); }).then(function(reply) {
+    fetch(apiUrl).then(function(response) {
+      if (!response.ok) throw new Error('Orion AI request failed (' + response.status + ').');
+      return response.text();
+    }).then(function(reply) {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
       reply = reply.trim().slice(0, 300);
       if (!reply) throw new Error('empty');
       orionHistory.push({ role: 'assistant', content: reply });
       saveOrionHistory(orionHistory);
       orionAddMessage('assistant', reply);
-    }).catch(function() {
+    }).catch(function(error) {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
-      var tips = [
-        'Always aim for the centre of the pocket, not the ball edge.',
-        'Control your power. A soft shot with good angle beats a hard miss.',
-        'Watch the cue ball after contact — that is your next shot setup.',
-        'When in doubt, play safe. Leave your opponent with nothing.',
-        'Ghost ball method: imagine a ball touching your target, aim for its centre.'
-      ];
-      var reply = tips[Math.floor(Math.random() * tips.length)];
-      orionHistory.push({ role: 'assistant', content: reply });
-      saveOrionHistory(orionHistory);
-      orionAddMessage('assistant', reply);
+      console.error('Orion could not complete the AI request:', error);
+      if (!unlimited) {
+        var failedUsage = readOrionUsage();
+        failedUsage.count = Math.max(0, failedUsage.count - 1);
+        writeOrionUsage(failedUsage);
+        updateOrionLimit();
+      }
+      orionAddMessage('system', 'Orion could not reach its AI service. Please try again shortly.');
     });
+  }
+
+  function readOrionUsage() {
+    var today = new Date().toISOString().slice(0, 10);
+    try {
+      var data = JSON.parse(localStorage.getItem(ORION_USAGE_KEY) || 'null');
+      return data && data.date === today
+        ? { date: today, count: Math.max(0, Number(data.count) || 0) }
+        : { date: today, count: 0 };
+    } catch (error) {
+      return { date: today, count: 0 };
+    }
+  }
+
+  function writeOrionUsage(usage) {
+    try {
+      localStorage.setItem(ORION_USAGE_KEY, JSON.stringify(usage));
+    } catch (error) {
+      console.error('Orion daily usage could not be saved.', error);
+    }
+  }
+
+  function showOrionLimit() {
+    var limit = document.getElementById('orion-limit');
+    if (limit) limit.hidden = false;
+  }
+
+  function updateOrionLimit() {
+    var profile = currentPhoneProfile();
+    var entitled = window.FeltoraStore && window.FeltoraStore.hasTipTier
+      ? window.FeltoraStore.hasTipTier(profile) : false;
+    var limit = document.getElementById('orion-limit');
+    if (limit) limit.hidden = entitled || readOrionUsage().count < 10;
+    var count = document.getElementById('orion-usage-count');
+    if (count) count.textContent = String(readOrionUsage().count);
   }
 
   // ── Contacts & Chat ──────────────────────────────────────────────
@@ -709,48 +808,17 @@
   }
 
 
-  // ── Mock Call ────────────────────────────────────────────────────
-  var CALL_RESPONSES = [
-    { duration: '0:32', outcome: 'They picked up! Rematch incoming.' },
-    { duration: '1:14', outcome: 'Great call! Game arranged for tonight.' },
-    { duration: '0:08', outcome: 'They were busy, will hit you up later.' },
-    { duration: '0:00', outcome: 'No answer. They might be in a game.' },
-    { duration: '0:45', outcome: 'They challenged you to a best-of-3!' }
-  ];
-
+  // ── Call availability ────────────────────────────────────────────
   function mockCall(friendName) {
     var overlay = document.getElementById('call-overlay');
     if (!overlay) return;
     var nameEl = document.getElementById('call-name');
     var statusEl = document.getElementById('call-status');
     if (nameEl) nameEl.textContent = friendName;
-    if (statusEl) statusEl.textContent = 'Calling...';
+    if (statusEl) statusEl.textContent = 'Voice calling is not connected yet. Send a message instead.';
     overlay.hidden = false;
-    var response = CALL_RESPONSES[Math.floor(Math.random() * CALL_RESPONSES.length)];
-    var ringTime = response.duration === '0:00' ? 4000 : 2000;
-    setTimeout(function() {
-      if (overlay.hidden) return;
-      if (response.duration === '0:00') {
-        if (statusEl) statusEl.textContent = 'No answer';
-        setTimeout(function() { endCall(response); }, 1500);
-      } else {
-        if (statusEl) statusEl.textContent = 'Connected 0:00';
-        var secs = 0;
-        var iv = setInterval(function() {
-          secs++;
-          if (statusEl && !overlay.hidden) statusEl.textContent = 'Connected 0:' + (secs < 10 ? '0' + secs : secs);
-        }, 1000);
-        setTimeout(function() { clearInterval(iv); endCall(response); }, 6000);
-      }
-    }, ringTime);
     var endBtn = document.getElementById('call-end-btn');
-    if (endBtn) endBtn.onclick = function() { endCall({ duration: '0:00', outcome: 'You ended the call.' }); };
-  }
-
-  function endCall(response) {
-    var overlay = document.getElementById('call-overlay');
-    if (overlay) overlay.hidden = true;
-    showToast('Call ended ' + response.duration + ' - ' + response.outcome);
+    if (endBtn) endBtn.onclick = function() { overlay.hidden = true; };
   }
 
   // ── Report system ────────────────────────────────────────────────
@@ -803,7 +871,7 @@
       btn.addEventListener('click', function() {
         document.querySelectorAll('.phone-tip-amt').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        selectedTipAmt = parseInt(btn.dataset.amount, 10);
+        selectedTipAmt = Number(btn.dataset.amount);
         var custom = document.getElementById('tip-custom-amount');
         if (custom) custom.value = '';
         updateTipDisplay(selectedTipAmt);
@@ -812,7 +880,7 @@
 
     var custom = document.getElementById('tip-custom-amount');
     if (custom) custom.addEventListener('input', function() {
-      var v = parseInt(custom.value, 10);
+      var v = Number(custom.value);
       if (v > 0) {
         document.querySelectorAll('.phone-tip-amt').forEach(function(b) { b.classList.remove('active'); });
         selectedTipAmt = v;
@@ -827,7 +895,7 @@
       var emailEl = document.getElementById('tip-email');
       var amount = selectedTipAmt;
       var email = emailEl ? emailEl.value.trim() : '';
-      if (!amount || amount < cfg.minAmount) {
+      if (!Number.isFinite(amount) || amount < cfg.minAmount) {
         showToast('Pick an amount first.'); return;
       }
       if (!email || email.indexOf('@') === -1) {
@@ -848,7 +916,29 @@
   function updateTipDisplay(amount) {
     var cfg = getGeoConfig(userCountry);
     var display = document.getElementById('tip-amount-display');
-    if (display) display.textContent = cfg.symbol + ' ' + amount.toLocaleString();
+    if (display) display.textContent = cfg.symbol + ' ' + Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  function refreshVerifiedSupporter(uid, attempt) {
+    var auth = window.FeltoraAuth;
+    if (!auth || !uid || auth.uid() !== uid) return;
+    auth.refreshProfile().then(function(profile) {
+      if (profile && profile.supporter) {
+        if (typeof updateProgressionDisplay === 'function') updateProgressionDisplay(profile);
+        buildRadioList();
+        updateOrionLimit();
+        if (window.FeltoraStore) window.FeltoraStore.render();
+        if (window.FeltoraCommunity) {
+          window.FeltoraCommunity.refresh().catch(function(error) {
+            console.error('Supporter badge could not refresh in the community feed:', error);
+          });
+        }
+        return;
+      }
+      if (attempt < 5) setTimeout(function() { refreshVerifiedSupporter(uid, attempt + 1); }, 1500);
+    }).catch(function(error) {
+      console.error('Paid supporter status could not be refreshed:', error);
+    });
   }
 
   function triggerPaystack(amount, email) {
@@ -864,6 +954,8 @@
       channels: cfg.channels,
       ref: ref,
       metadata: {
+        uid: window.FeltoraAuth && window.FeltoraAuth.uid() || '',
+        username: window.FeltoraAuth && window.FeltoraAuth.currentUser() || '',
         custom_fields: [
           { display_name: 'Game', variable_name: 'game', value: 'FELTORA 8-ball pool' },
           { display_name: 'Country', variable_name: 'country', value: userCountry },
@@ -871,18 +963,8 @@
         ]
       },
       callback: function(response) {
-        // Log to Firebase
-        if (window.FeltoraFirebase) {
-          window.FeltoraFirebase.set('/tips/' + response.reference, {
-            reference: response.reference,
-            amount: amount,
-            currency: cfg.currency,
-            email: email,
-            country: userCountry,
-            ts: Date.now(),
-            status: 'success'
-          }).catch(function() {});
-        }
+        var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
+        if (uid) refreshVerifiedSupporter(uid, 0);
         // Show personalised thank you screen
         var tipView = document.getElementById('phone-tip-view-inner');
         if (tipView) {
@@ -890,7 +972,7 @@
             + '<div class="tip-ty-emoji">' + thanks.emoji + '</div>'
             + '<h3 class="tip-ty-title">Thank you!</h3>'
             + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
-            + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + amount.toLocaleString() + ' ' + cfg.currency + '</div>'
+            + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cfg.currency + '</div>'
             + '<div class="tip-ty-ref"></div>'
             + '<button class="tip-ty-back ob-btn-primary" type="button">Back to FELTORA</button>'
             + '</div>';
@@ -965,7 +1047,15 @@
       }
     } catch (error) {
       console.error('Phone community feed failed to load:', error);
-      feed.innerHTML = '<p class="phone-feed-empty">Community feed is unavailable right now.</p>';
+      var errorText = String(error && error.message || error);
+      var message = /401.*permission denied|permission denied.*401|PERMISSION_DENIED/i.test(errorText)
+        ? 'Community database rules are blocking public reads. Publish firebase-rules.json to the configured Realtime Database.'
+        : 'Community feed is unavailable right now. Check your connection and try again.';
+      feed.textContent = '';
+      var notice = document.createElement('p');
+      notice.className = 'phone-feed-empty';
+      notice.textContent = message;
+      feed.appendChild(notice);
       return;
     }
     if (!posts.length) {
@@ -986,34 +1076,218 @@
 
 
   // -- Phone view navigation
-  function phoneShowView(id) {
-    document.querySelectorAll('.phone-view').forEach(function(v) {
-      v.classList.toggle('active', v.id === 'phone-' + id);
+  var phoneCameraStream = null;
+  var phoneCameraRequestId = 0;
+  var PHONE_GALLERY_KEY = 'feltora_phone_gallery';
+
+  function setCameraStatus(message) {
+    var status = document.getElementById('phone-camera-status');
+    if (status) status.textContent = message;
+  }
+
+  function stopPhoneCamera() {
+    phoneCameraRequestId++;
+    var cameraWasOn = phoneCameraStream !== null;
+    if (phoneCameraStream) {
+      phoneCameraStream.getTracks().forEach(function(track) { track.stop(); });
+      phoneCameraStream = null;
+    }
+    var video = document.getElementById('phone-camera-video');
+    var capture = document.getElementById('phone-camera-capture');
+    var placeholder = document.getElementById('phone-camera-placeholder');
+    if (video) video.srcObject = null;
+    if (capture) capture.disabled = true;
+    if (placeholder) placeholder.hidden = false;
+    if (cameraWasOn) setCameraStatus('Camera is off.');
+  }
+
+  async function startPhoneCamera() {
+    var video = document.getElementById('phone-camera-video');
+    var capture = document.getElementById('phone-camera-capture');
+    var placeholder = document.getElementById('phone-camera-placeholder');
+    if (!video || !capture) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraStatus('Camera access requires a supported browser and a secure connection (HTTPS or localhost).');
+      return;
+    }
+    stopPhoneCamera();
+    var requestId = phoneCameraRequestId;
+    setCameraStatus('Waiting for camera permission…');
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      if (requestId !== phoneCameraRequestId) {
+        stream.getTracks().forEach(function(track) { track.stop(); });
+        return;
+      }
+      phoneCameraStream = stream;
+      video.srcObject = phoneCameraStream;
+      await video.play();
+      capture.disabled = false;
+      if (placeholder) placeholder.hidden = true;
+      setCameraStatus('Camera is on. Photos stay in this browser on this device.');
+    } catch (error) {
+      stopPhoneCamera();
+      if (error && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')) {
+        setCameraStatus('Camera permission was denied. Allow camera access in your browser settings to continue.');
+      } else if (error && error.name === 'NotFoundError') {
+        setCameraStatus('No camera was found on this device.');
+      } else {
+        setCameraStatus('Could not start the camera. Check browser permission and try again.');
+      }
+    }
+  }
+
+  function readPhoneGallery() {
+    try {
+      var photos = JSON.parse(localStorage.getItem(PHONE_GALLERY_KEY) || '[]');
+      return Array.isArray(photos) ? photos : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function renderPhoneGallery() {
+    var grid = document.getElementById('phone-gallery-grid');
+    if (!grid) return;
+    var photos = readPhoneGallery();
+    grid.replaceChildren();
+    if (photos === null) {
+      grid.textContent = 'Could not read photos from this browser’s local storage.';
+      return;
+    }
+    if (!photos.length) {
+      var empty = document.createElement('p');
+      empty.className = 'phone-gallery-empty';
+      empty.textContent = 'Photos you take with this device appear here.';
+      grid.appendChild(empty);
+      return;
+    }
+    photos.forEach(function(photo, index) {
+      if (!photo || typeof photo.data !== 'string' || !photo.data.startsWith('data:image/jpeg;base64,')) return;
+      var link = document.createElement('a');
+      link.href = photo.data;
+      link.download = 'feltora-photo-' + (index + 1) + '.jpg';
+      link.className = 'phone-gallery-photo';
+      var image = document.createElement('img');
+      image.src = photo.data;
+      image.alt = 'Photo ' + (index + 1);
+      link.appendChild(image);
+      grid.appendChild(link);
     });
   }
 
+  function capturePhonePhoto() {
+    var video = document.getElementById('phone-camera-video');
+    if (!video || !phoneCameraStream || !video.videoWidth || !video.videoHeight) {
+      setCameraStatus('The camera is not ready yet. Wait for the preview and try again.');
+      return;
+    }
+    var canvas = document.createElement('canvas');
+    var scale = Math.min(1, 960 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    var context = canvas.getContext('2d');
+    if (!context) {
+      setCameraStatus('Could not capture this photo. Please try again.');
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    var photos = readPhoneGallery();
+    if (photos === null) {
+      setCameraStatus('Could not access the photo gallery in this browser.');
+      return;
+    }
+    photos.unshift({ data: canvas.toDataURL('image/jpeg', 0.8), capturedAt: Date.now() });
+    try {
+      localStorage.setItem(PHONE_GALLERY_KEY, JSON.stringify(photos.slice(0, 6)));
+      setCameraStatus('Photo saved to this device’s Feltora gallery.');
+    } catch (error) {
+      setCameraStatus('Could not save the photo. Device storage may be full.');
+    }
+  }
+
+  function phoneShowView(id) {
+    var activeView = document.querySelector('.phone-view.active');
+    if (activeView && activeView.id === 'phone-camera' && id !== 'camera') stopPhoneCamera();
+    document.querySelectorAll('.phone-view').forEach(function(v) {
+      v.classList.toggle('active', v.id === 'phone-' + id);
+    });
+    if (id === 'gallery') renderPhoneGallery();
+    if (id === 'store' && window.FeltoraStore) window.FeltoraStore.render();
+    if (id === 'orion') updateOrionLimit();
+    if (id === 'radio') buildRadioList();
+  }
+
   // -- Floating FAB
+  function openGamePhone(initialApp, tipAmount) {
+    var modal = document.getElementById('game-phone-modal');
+    var inner = document.getElementById('game-phone-modal-inner');
+    var frame = document.getElementById('phone-frame');
+    if (!modal || !inner || !frame) return;
+    if (!inner.contains(frame)) inner.appendChild(frame);
+    modal.hidden = false;
+    var navButton = document.getElementById('lbn-phone');
+    if (navButton) {
+      navButton.classList.add('active');
+      navButton.setAttribute('aria-pressed', 'true');
+    }
+    updateStatusBar();
+    phoneUpdateProfile();
+    phoneRenderFeed();
+    updateWeatherWidget();
+    buildRadioList();
+    renderFChatRooms();
+    initTipView();
+    buildRadioList();
+    if (initialApp) phoneShowView(initialApp);
+    if (initialApp === 'tip' && tipAmount) selectTipAmount(tipAmount);
+  }
+
+  function selectTipAmount(amount) {
+    selectedTipAmt = Number(amount) || 0;
+    var matched = false;
+    document.querySelectorAll('.phone-tip-amt').forEach(function(button) {
+      var selected = Number(button.dataset.amount) === selectedTipAmt;
+      button.classList.toggle('active', selected);
+      matched = matched || selected;
+    });
+    var custom = document.getElementById('tip-custom-amount');
+    if (custom) custom.value = matched ? '' : String(selectedTipAmt);
+    updateTipDisplay(selectedTipAmt);
+  }
+
+  function openPhoneApp(app, tipAmount) {
+    openGamePhone(app, tipAmount);
+  }
+
+  function closeGamePhone() {
+    var modal = document.getElementById('game-phone-modal');
+    var frame = document.getElementById('phone-frame');
+    if (modal) modal.hidden = true;
+    stopPhoneCamera();
+    var navButton = document.getElementById('lbn-phone');
+    if (navButton) {
+      navButton.classList.remove('active');
+      navButton.setAttribute('aria-pressed', 'false');
+    }
+    var communityPhoneView = document.getElementById('community-phone-view');
+    if (communityPhoneView && frame && !communityPhoneView.contains(frame)) {
+      communityPhoneView.appendChild(frame);
+    }
+  }
+
   function initGameFAB() {
     var fab = document.getElementById('game-phone-fab');
     var modal = document.getElementById('game-phone-modal');
     var backdrop = document.getElementById('game-phone-modal-backdrop');
     var closeBtn = document.getElementById('game-phone-modal-close');
-    var inner = document.getElementById('game-phone-modal-inner');
-    var phoneFrame = document.getElementById('phone-frame');
-    if (!fab || !modal || !phoneFrame) return;
-    fab.addEventListener('click', function() {
-      modal.hidden = false;
-      if (!inner.contains(phoneFrame)) inner.appendChild(phoneFrame);
-      updateStatusBar(); phoneUpdateProfile(); phoneRenderFeed();
-      updateWeatherWidget(); buildRadioList(); renderFChatRooms(); initTipView();
-    });
-    function closeModal() {
-      modal.hidden = true;
-      var cv = document.getElementById('community-phone-view');
-      if (cv && !cv.contains(phoneFrame)) cv.appendChild(phoneFrame);
-    }
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    if (backdrop) backdrop.addEventListener('click', closeModal);
+    if (!fab || !modal || !document.getElementById('phone-frame')) return;
+    fab.addEventListener('click', openGamePhone);
+    if (closeBtn) closeBtn.addEventListener('click', closeGamePhone);
+    if (backdrop) backdrop.addEventListener('click', closeGamePhone);
   }
 
   // -- Community toggle
@@ -1039,12 +1313,34 @@
     var goBtn = document.getElementById('phone-browser-go');
     var urlInput = document.getElementById('phone-browser-url');
     var frame = document.getElementById('phone-browser-frame');
-    if (!goBtn || !urlInput || !frame) return;
+    var openLink = document.getElementById('phone-browser-open');
+    if (!goBtn || !urlInput || !frame || !openLink) return;
+    function resolveBrowserInput() {
+      var value = urlInput.value.trim();
+      if (!value) return null;
+      if (!/^https?:\/\//i.test(value)) {
+        return 'https://html.duckduckgo.com/html/?q=' + encodeURIComponent(value);
+      }
+      var url;
+      try {
+        url = new URL(value);
+      } catch {
+        showToast('Enter a valid web address or search term.');
+        return null;
+      }
+      if (url.hostname === 'duckduckgo.com' || url.hostname === 'www.duckduckgo.com') {
+        url.hostname = 'html.duckduckgo.com';
+        url.pathname = '/html/';
+      }
+      return url.href;
+    }
     goBtn.addEventListener('click', function() {
-      var url = urlInput.value.trim();
+      var url = resolveBrowserInput();
       if (!url) return;
-      if (url.indexOf('http') !== 0) url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url) + '&kae=d';
-      frame.src = url;
+      urlInput.value = url;
+      openLink.href = url;
+      frame.textContent = 'Opening this site in a new tab. If it did not open, use the link below.';
+      openLink.click();
     });
     urlInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') goBtn.click(); });
   }
@@ -1250,8 +1546,7 @@
     var playBtn = document.getElementById('phone-play-btn');
     if (!playBtn) return;
     playBtn.addEventListener('click', function() {
-      var modal = document.getElementById('game-phone-modal');
-      if (modal) modal.hidden = true;
+      closeGamePhone();
       var phoneView = document.getElementById('community-phone-view');
       if (phoneView) phoneView.hidden = true;
       phoneOpen = false;
@@ -1296,6 +1591,10 @@
       var fchatVoice  = e.target.closest('#fchat-voice-btn');
       var reportBtn   = e.target.closest('.fchat-report-btn');
       var reactBtn    = e.target.closest('.msg-react-btn');
+      var cameraStart = e.target.closest('#phone-camera-start');
+      var cameraCapture = e.target.closest('#phone-camera-capture');
+      var weatherLocate = e.target.closest('#phone-weather-locate');
+      var orionTip = e.target.closest('#orion-tip-button');
 
       if (icon) {
         var app = icon.dataset.open;
@@ -1306,8 +1605,13 @@
         if (app === 'settings') { phoneUpdateProfile(); initPhoneSettings(); }
         if (app === 'tip') initTipView();
         phoneShowView(app);
+        if (app === 'camera') void startPhoneCamera();
       }
       if (back) phoneShowView(back.dataset.back);
+      if (cameraStart) void startPhoneCamera();
+      if (cameraCapture) capturePhonePhoto();
+      if (weatherLocate) fetchLocalWeather();
+      if (orionTip && window.FeltoraStore) window.FeltoraStore.openTip(1);
       if (tab) {
         var tabId = tab.dataset.tab;
         document.querySelectorAll('.pft-tab').forEach(function(t) { t.classList.remove('active'); });
@@ -1329,7 +1633,12 @@
           startVoiceNote({ type: 'dm', id: fid });
         }
       }
-      if (stationBtn) playStation({ name: stationBtn.dataset.name, url: stationBtn.dataset.url });
+      if (stationBtn) {
+        if (stationBtn.dataset.locked === 'true') {
+          showToast('Tip KES 50+ to unlock all radio stations.');
+          if (window.FeltoraStore) window.FeltoraStore.openTip(1);
+        } else playStation({ name: stationBtn.dataset.name, url: stationBtn.dataset.url });
+      }
       if (radioBtn) { if (radioPlaying) stopRadio(); else if (currentStation) playStation(currentStation); }
       if (chatBack) {
         var cv = document.getElementById('phone-chat-view');
@@ -1439,10 +1748,17 @@
   });
 
   window.FeltoraPhone = {
+    open: openGamePhone,
+    openApp: openPhoneApp,
+    close: closeGamePhone,
     addFriend: addFriend,
     getFriends: getFriends,
     renderContacts: renderContacts,
     showToast: showToast,
+    getPaymentConfig: function() {
+      var config = getGeoConfig(userCountry);
+      return { currency: config.currency, symbol: config.symbol };
+    },
     startVoiceNote: startVoiceNote,
     stopVoiceNote: stopVoiceNote
   };

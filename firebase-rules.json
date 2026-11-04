@@ -78,7 +78,26 @@
     "profiles": {
       ".read": true,
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid && newData.child('username').val() === data.child('username').val() && newData.child('stats/wins').val() === data.child('stats/wins').val() && newData.child('stats/losses').val() === data.child('stats/losses').val() && newData.child('stats/frames').val() === data.child('stats/frames').val()"
+        ".write": "auth != null && auth.uid === $uid && newData.child('username').val() === data.child('username').val() && newData.child('stats/wins').val() === data.child('stats/wins').val() && newData.child('stats/losses').val() === data.child('stats/losses').val() && newData.child('stats/frames').val() === data.child('stats/frames').val() && newData.child('supporter').val() === data.child('supporter').val() && (newData.child('unlocks/tipTier').val() === data.child('unlocks/tipTier').val() || (!data.child('unlocks/tipTier').exists() && newData.child('unlocks/tipTier').val() === 0))"
+      }
+    },
+    "supporters": {
+      ".read": true
+    },
+    "leaderboard": {
+      "weekly": {
+        ".read": true,
+        "$week": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && newData.child('username').val() === root.child('profiles').child($uid).child('username').val() && newData.child('wins').isNumber() && newData.child('wins').val() >= 1 && newData.child('wins').val() <= data.child('wins').val() + 1",
+            ".validate": "newData.hasChildren(['username', 'wins', 'updatedAt']) && newData.child('updatedAt').isNumber()"
+          }
+        }
+      }
+    },
+    "tournament": {
+      "active": {
+        ".read": true
       }
     }
   }

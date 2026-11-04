@@ -2631,7 +2631,6 @@ h1 {
 #tutorial-card {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
   width: min(360px, calc(100vw - 24px));
   /* bright visible card — light surface so it pops on any bg */
   background: #1a2e24;
@@ -3718,3 +3717,104 @@ h1 {
   .ob-avatar-grid { grid-template-columns: repeat(4, 1fr); gap: 7px; }
   .ob-avatar-btn .mascot-art { width: 42px; height: 42px; }
 }
+
+/* new phone app icon colors */
+.pai-contacts { background: linear-gradient(135deg, #5856d6, #af52de); }
+.pai-radio    { background: linear-gradient(135deg, #ff6b35, #ff9500); }
+.pai-mpesa    { background: linear-gradient(135deg, #00a550, #007a3d); color: #fff; font: 800 1.1rem/1 system-ui,sans-serif; }
+.pai-weather  { background: linear-gradient(135deg, #32ade6, #007aff); }
+
+/* phone contact rows */
+.phone-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.phone-contact-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,240,168,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 0.8rem/1 system-ui,sans-serif;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.phone-contact-info {
+  flex: 1;
+  min-width: 0;
+}
+.phone-contact-info strong { display: block; font-size: 0.68rem; color: #fff; }
+.phone-contact-info small  { font-size: 0.58rem; color: rgba(255,255,255,0.35); }
+.phone-contact-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.phone-action-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 5px 7px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s;
+}
+.phone-action-btn:hover { background: rgba(255,255,255,0.12); }
+
+/* chat messages */
+.phone-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+}
+.phone-msg.mine  { align-self: flex-end; align-items: flex-end; }
+.phone-msg.theirs { align-self: flex-start; align-items: flex-start; }
+.phone-msg span {
+  padding: 7px 10px;
+  border-radius: 14px;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.phone-msg.mine span   { background: var(--accent); color: #050a08; border-bottom-right-radius: 4px; }
+.phone-msg.theirs span { background: rgba(255,255,255,0.1); color: #fff; border-bottom-left-radius: 4px; }
+.phone-msg time { font-size: 0.52rem; color: rgba(255,255,255,0.3); margin-top: 2px; padding: 0 4px; }
+
+/* radio station buttons */
+.radio-station-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  color: #fff;
+  font: 600 0.72rem/1 system-ui,sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+  width: 100%;
+}
+.radio-station-btn:hover { background: rgba(255,255,255,0.1); }
+.radio-station-btn.active { border-color: rgba(0,240,168,0.5); background: rgba(0,240,168,0.08); color: #00f0a8; }
+
+/* follow button in community feed */
+.feed-follow-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
+  margin-left: auto;
+}
+.feed-follow-btn:hover { color: var(--accent); border-color: rgba(0,240,168,0.4); background: var(--accent-dim); }
+.feed-follow-btn:disabled { opacity: 0.7; cursor: default; }

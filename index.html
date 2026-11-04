@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261104-onboard">
+  <link rel="stylesheet" href="css/styles.css?v=20261104-phone">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -535,7 +535,7 @@
             <div class="phone-screen">
               <div class="phone-status-bar">
                 <span class="phone-time" id="phone-time">9:41</span>
-                <span class="phone-icons">&#x1F4F6; &#x1F50B;</span>
+                <span id="phone-battery" style="font-size:0.55rem;">🔋 100%</span>
               </div>
               <div class="phone-app" id="phone-app">
                 <!-- Home screen -->
@@ -565,6 +565,22 @@
                     <button class="phone-app-icon" data-open="settings" aria-label="Settings">
                       <span class="pai-art pai-settings">&#x2699;&#xFE0F;</span>
                       <span>Settings</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="contacts" aria-label="Contacts">
+                      <span class="pai-art pai-contacts">&#x1F465;</span>
+                      <span>Contacts</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="radio" aria-label="Radio">
+                      <span class="pai-art pai-radio">&#x1F4FB;</span>
+                      <span>Radio</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="mpesa" aria-label="M-Pesa">
+                      <span class="pai-art pai-mpesa">M</span>
+                      <span>M-Pesa</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="weather" aria-label="Weather">
+                      <span class="pai-art pai-weather">&#x26C5;</span>
+                      <span>Weather</span>
                     </button>
                   </div>
                   <div class="phone-dock">
@@ -633,10 +649,95 @@
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Settings</span><span></span></div>
                   <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x2699;&#xFE0F; Device settings<br><small>FELTORA v1.0</small></p></div>
                 </div>
+
+                <!-- Contacts app -->
+                <div class="phone-view" id="phone-contacts">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Contacts</span><span></span></div>
+                  <div id="phone-contacts-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;"></div>
+                  <div id="phone-chat-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+                    <div class="phone-app-header">
+                      <button id="phone-chat-back" style="background:none;border:none;color:#00f0a8;font-size:1rem;cursor:pointer;padding:4px 6px;">&#x2190;</button>
+                      <span class="phone-app-title" id="phone-chat-name">Chat</span>
+                      <span></span>
+                    </div>
+                    <div id="phone-chat-messages" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;background:#050a08;"></div>
+                    <div style="display:flex;gap:6px;padding:8px;background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,255,255,0.06);">
+                      <input id="phone-chat-input" type="text" placeholder="Message..." maxlength="200" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:7px 12px;color:#fff;font-size:0.68rem;outline:none;">
+                      <button id="phone-chat-send" style="background:#00f0a8;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:0.9rem;flex-shrink:0;">&#x27A4;</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Radio app -->
+                <div class="phone-view" id="phone-radio">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Radio Kenya</span><span></span></div>
+                  <div style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;background:#050a08;">
+                    <div style="background:rgba(0,240,168,0.08);border:1px solid rgba(0,240,168,0.2);border-radius:12px;padding:12px;text-align:center;">
+                      <div style="font-size:1.4rem;margin-bottom:4px;">📻</div>
+                      <div style="font-size:0.65rem;color:rgba(255,255,255,0.5);">Now Playing</div>
+                      <div id="radio-now-playing" style="font:700 0.78rem/1.3 system-ui,sans-serif;color:#00f0a8;margin:4px 0;">Not playing</div>
+                      <div id="radio-status" style="font-size:0.6rem;color:rgba(255,255,255,0.3);"></div>
+                      <button id="radio-play-btn" style="margin-top:8px;padding:6px 16px;border-radius:20px;border:1px solid #00f0a8;background:rgba(0,240,168,0.12);color:#00f0a8;font:700 0.72rem/1 system-ui,sans-serif;cursor:pointer;">&#x25B6; Play</button>
+                    </div>
+                    <div style="font:700 0.62rem/1 system-ui,sans-serif;color:rgba(255,255,255,0.4);letter-spacing:0.08em;text-transform:uppercase;padding:0 2px;">Stations</div>
+                    <div id="radio-stations-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                  </div>
+                </div>
+
+                <!-- M-Pesa app -->
+                <div class="phone-view" id="phone-mpesa">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">M-Pesa</span><span></span></div>
+                  <div style="flex:1;background:#00a550;display:flex;flex-direction:column;align-items:center;padding:16px 12px;gap:10px;">
+                    <div style="font:700 1.1rem/1 system-ui,sans-serif;color:#fff;letter-spacing:0.04em;">M-PESA</div>
+                    <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:12px 16px;width:100%;text-align:center;">
+                      <div style="font-size:0.62rem;color:rgba(255,255,255,0.7);">Balance</div>
+                      <div style="font:800 1.4rem/1.2 system-ui,sans-serif;color:#fff;margin:4px 0;">KES 4,200.00</div>
+                      <div style="font-size:0.58rem;color:rgba(255,255,255,0.5);">Available balance</div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;">
+                        <div style="font-size:1.1rem;">📤</div>
+                        <div style="font-size:0.6rem;color:#fff;margin-top:3px;">Send Money</div>
+                      </div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;">
+                        <div style="font-size:1.1rem;">📥</div>
+                        <div style="font-size:0.6rem;color:#fff;margin-top:3px;">Receive</div>
+                      </div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;">
+                        <div style="font-size:1.1rem;">🏦</div>
+                        <div style="font-size:0.6rem;color:#fff;margin-top:3px;">Bank</div>
+                      </div>
+                      <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;text-align:center;cursor:pointer;">
+                        <div style="font-size:1.1rem;">📱</div>
+                        <div style="font-size:0.6rem;color:#fff;margin-top:3px;">Buy Airtime</div>
+                      </div>
+                    </div>
+                    <div style="font-size:0.58rem;color:rgba(255,255,255,0.4);text-align:center;">Demo only — not a real M-Pesa account</div>
+                  </div>
+                </div>
+
+                <!-- Weather app -->
+                <div class="phone-view" id="phone-weather">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Weather</span><span></span></div>
+                  <div style="flex:1;background:linear-gradient(160deg,#1a3a5c,#0d1f33);display:flex;flex-direction:column;align-items:center;padding:20px 12px;gap:8px;">
+                    <div style="font-size:0.7rem;color:rgba(255,255,255,0.6);">Nairobi, Kenya</div>
+                    <div id="phone-weather-widget" style="font:400 0.9rem/1.5 system-ui,sans-serif;color:#fff;text-align:center;">🌤 Loading…</div>
+                    <div style="font-size:0.62rem;color:rgba(255,255,255,0.4);margin-top:8px;">Live weather via Open-Meteo</div>
+                  </div>
+                </div>
+
               </div>
             </div>
             <div class="phone-home-bar"></div>
           </div>
+        </div>
+
+        <!-- Call overlay -->
+        <div id="call-overlay" hidden style="position:fixed;inset:0;z-index:10400;background:linear-gradient(160deg,#0d1f33,#050a08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+          <div style="font-size:3rem;">📞</div>
+          <div id="call-name" style="font:800 1.3rem/1 system-ui,sans-serif;color:#fff;"></div>
+          <div id="call-status" style="font:400 0.85rem/1 system-ui,sans-serif;color:rgba(255,255,255,0.5);">Calling…</div>
+          <button id="call-end-btn" style="margin-top:24px;width:64px;height:64px;border-radius:50%;border:none;background:#ff3b30;color:#fff;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 20px rgba(255,59,48,0.5);">&#x260F;</button>
         </div>
 
         <div class="community-tabs" role="tablist" aria-label="Feed categories">
@@ -746,9 +847,10 @@
   <script src="src/auth.js?v=20261104-fix12" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261104-fix10" defer></script>
-  <script src="src/game.js?v=20261104-onboard" defer></script>
-  <script src="src/community.js?v=20261104-community" defer></script>
+  <script src="src/game.js?v=20261104-phone" defer></script>
+  <script src="src/community.js?v=20261104-phone" defer></script>
   <script src="src/onboarding.js?v=20261104-onboard" defer></script>
+  <script src="src/phone.js?v=20261104-phone" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {
@@ -802,18 +904,52 @@
       try { localStorage.setItem('feltora-install-dismissed', '1'); } catch {}
     });
 
-    // iOS Safari: no beforeinstallprompt — show manual hint instead
+    // iOS Safari: no beforeinstallprompt — show step-by-step sheet
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isInStandalone = window.navigator.standalone === true;
     if (isIos && !isInStandalone) {
       setTimeout(() => {
         try { if (localStorage.getItem('feltora-install-dismissed')) return; } catch {}
         const hint = document.getElementById('install-banner');
-        hint.querySelector('#install-btn').textContent = 'How?';
-        hint.querySelector('div > div > div:last-child').textContent = 'Tap Share → Add to Home Screen';
+        hint.querySelector('#install-btn').textContent = 'How to install';
+        hint.querySelector('div > div > div:last-child').textContent = 'Add to your home screen — free, instant';
         hint.style.display = 'flex';
         document.getElementById('install-btn').addEventListener('click', () => {
-          hint.style.display = 'none';
+          // show iOS instruction sheet instead of closing
+          let sheet = document.getElementById('ios-install-sheet');
+          if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'ios-install-sheet';
+            sheet.setAttribute('role', 'dialog');
+            sheet.setAttribute('aria-label', 'How to install FELTORA');
+            sheet.style.cssText = [
+              'position:fixed','inset:0','z-index:10200',
+              'display:flex','align-items:flex-end','justify-content:center',
+              'background:rgba(0,0,0,0.7)','backdrop-filter:blur(4px)',
+              'padding:16px'
+            ].join(';');
+            sheet.innerHTML = '<div style="width:100%;max-width:420px;background:#1a2e24;border:1px solid rgba(0,240,168,0.3);border-radius:24px;padding:24px 20px 28px;box-shadow:0 -8px 40px rgba(0,0,0,0.6);">'
+              + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">'
+              + '<strong style="font:700 1rem/1 system-ui,sans-serif;color:#e6f2eb;">Add to Home Screen</strong>'
+              + '<button id="ios-sheet-close" style="background:none;border:none;color:#7a9e8c;font-size:1.2rem;cursor:pointer;padding:4px;">&#x2715;</button>'
+              + '</div>'
+              + '<ol style="margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:14px;color:#e6f2eb;font:400 0.88rem/1.5 system-ui,sans-serif;">'
+              + '<li>Tap the <strong style="color:#00f0a8;">Share</strong> button at the bottom of Safari <span style="font-size:1.1rem;">&#x1F4E4;</span></li>'
+              + '<li>Scroll down and tap <strong style="color:#00f0a8;">"Add to Home Screen"</strong> <span style="font-size:1.1rem;">&#x2795;</span></li>'
+              + '<li>Tap <strong style="color:#00f0a8;">"Add"</strong> in the top right corner</li>'
+              + '<li>FELTORA will appear on your home screen like a native app &#x1F3B1;</li>'
+              + '</ol>'
+              + '<button id="ios-sheet-got-it" style="margin-top:20px;width:100%;padding:13px;border-radius:14px;border:none;background:linear-gradient(135deg,#00f0a8,#00c88a);color:#050a08;font:700 0.95rem/1 system-ui,sans-serif;cursor:pointer;">Got it!</button>'
+              + '</div>';
+            document.body.appendChild(sheet);
+            document.getElementById('ios-sheet-close').addEventListener('click', () => sheet.remove());
+            document.getElementById('ios-sheet-got-it').addEventListener('click', () => {
+              sheet.remove();
+              hint.style.display = 'none';
+              try { localStorage.setItem('feltora-install-dismissed', '1'); } catch {}
+            });
+            sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.remove(); });
+          }
         }, { once: true });
       }, 4000);
     }

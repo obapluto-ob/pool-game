@@ -2379,14 +2379,36 @@ function bootAuth() {
   if (user) {
     applyAccountToLobby(user);
     showScreen('lobby');
-  } else {
-    // pre-fill last used username so returning users only need their PIN
-    try {
-      const last = localStorage.getItem('feltora-last-user');
-      if (last) document.getElementById('login-username').value = last;
-    } catch {}
-    showScreen('auth');
+    return;
   }
+  // check if a returning user exists — pre-fill and hide the create account tab
+  try {
+    const last = localStorage.getItem('feltora-last-user');
+    if (last && window.FeltoraAuth.getAccount(last)) {
+      // returning user — show only sign-in, pre-fill username, hide create tab
+      document.getElementById('login-username').value = last;
+      document.getElementById('login-pin').focus();
+      document.getElementById('tab-register').style.display = 'none';
+      // show a "New player? Create account" link instead
+      let newLink = document.getElementById('auth-new-player-link');
+      if (!newLink) {
+        newLink = document.createElement('button');
+        newLink.id = 'auth-new-player-link';
+        newLink.type = 'button';
+        newLink.textContent = 'New player? Create account';
+        newLink.style.cssText = 'background:none;border:none;color:var(--muted);font-size:0.78rem;cursor:pointer;padding:8px 0 0;text-decoration:underline;width:100%;text-align:center;';
+        newLink.addEventListener('click', () => {
+          document.getElementById('tab-register').style.display = '';
+          document.getElementById('tab-register').click();
+          newLink.remove();
+        });
+        document.getElementById('panel-login').appendChild(newLink);
+      }
+    } else if (last) {
+      document.getElementById('login-username').value = last;
+    }
+  } catch {}
+  showScreen('auth');
 }
 
 function applyAccountToLobby(username) {
@@ -2660,28 +2682,30 @@ function positionTutCard() {
   const cardH = card.offsetHeight || 240;
   const pad = 16;
 
-  // reset
+  // reset — always use pixel left + no transform to avoid iPhone conflict
   arrow.style.display = 'none';
   spotlight.style.display = 'none';
-  card.style.top = '';
+  card.style.transform = 'none';
   card.style.bottom = '';
-  card.style.transform = 'translateX(-50%)';
+
+  // horizontal centre — always pixel-based, safe on all devices
+  const cardLeft = Math.max(pad, Math.min(vw - cardW - pad, (vw - cardW) / 2));
+  card.style.left = `${cardLeft}px`;
+  card.style.width = `${cardW}px`;
 
   if (!el) {
-    // centre card vertically
     card.style.top = `${Math.max(pad, (vh - cardH) / 2)}px`;
     return;
   }
 
   const r = el.getBoundingClientRect();
-  // spotlight
   spotlight.style.display = 'block';
   spotlight.style.top    = `${r.top - 6}px`;
   spotlight.style.left   = `${r.left - 6}px`;
   spotlight.style.width  = `${r.width + 12}px`;
   spotlight.style.height = `${r.height + 12}px`;
 
-  // try below first, then above, then centre
+  // try below, then above, then safe centre
   const belowTop = r.bottom + pad;
   const aboveTop = r.top - cardH - pad;
   if (belowTop + cardH + pad <= vh) {
@@ -2689,14 +2713,8 @@ function positionTutCard() {
   } else if (aboveTop >= pad) {
     card.style.top = `${aboveTop}px`;
   } else {
-    // not enough room above or below — centre vertically, ensure no overlap
     card.style.top = `${Math.max(pad, Math.min(vh - cardH - pad, (vh - cardH) / 2))}px`;
   }
-
-  // clamp horizontal so card never goes off screen
-  const cardLeft = Math.max(pad, Math.min(vw - cardW - pad, (vw - cardW) / 2));
-  card.style.left = `${cardLeft}px`;
-  card.style.transform = 'none';
 }
 
 function renderTutStep() {

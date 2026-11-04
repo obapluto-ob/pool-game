@@ -67,6 +67,7 @@ function communityRenderFeed() {
       + img
       + '<p class="feed-body">' + escapeHtml(p.body) + '</p>'
       + '<div class="feed-card-footer">'
+      + (me && p.author !== me && isVerified ? '<button class="feed-follow-btn" data-author="' + p.author + '" aria-label="Follow">+ Follow</button>' : '')
       + '<button class="feed-like-btn' + likedClass + '" data-id="' + p.id + '" aria-label="Like">'
       + heart + ' <span>' + likeCount + '</span>'
       + '</button>'
@@ -108,6 +109,16 @@ document.getElementById('community-feed').addEventListener('click', function(e) 
       if (idx === -1) p.likes.push(me); else p.likes.splice(idx, 1);
       communitySave(posts);
       communityRenderFeed();
+    }
+  }
+  var followBtn = e.target.closest('.feed-follow-btn');
+  if (followBtn) {
+    var author = followBtn.dataset.author;
+    if (window.FeltoraPhone && window.FeltoraPhone.addFriend(author)) {
+      followBtn.textContent = '✔ Following';
+      followBtn.disabled = true;
+      followBtn.style.color = 'var(--accent)';
+      followBtn.style.borderColor = 'rgba(0,240,168,0.4)';
     }
   }
   if (delBtn) {

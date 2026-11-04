@@ -1,5 +1,5 @@
-// FELTORA Service Worker — auto-update build
-const CACHE = 'feltora-v3';
+// FELTORA Service Worker — network-first everywhere, instant updates
+const CACHE = 'feltora-v5';
 const PRECACHE = [
   '/index.html',
   '/css/styles.css',
@@ -10,8 +10,9 @@ const PRECACHE = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(PRECACHE))
-    // do NOT skipWaiting here — wait for user confirmation
   );
+  // Take over immediately — no waiting for old tabs to close
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -22,11 +23,9 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Listen for "SKIP_WAITING" message from the page
+// Listen for SKIP_WAITING message (legacy, kept for compat)
 self.addEventListener('message', (e) => {
-  if (e.data && e.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (e) => {
@@ -34,31 +33,15 @@ self.addEventListener('fetch', (e) => {
   const isExternal = url.origin !== self.location.origin;
   if (isExternal || e.request.method !== 'GET') return;
 
-  // Network-first for HTML (so we always detect new versions)
-  if (url.pathname === '/' || url.pathname.endsWith('.html')) {
-    e.respondWith(
-      fetch(e.request).then((res) => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  // Cache-first for everything else (JS, CSS, assets)
+  // Network-first for EVERYTHING — always try network, fall back to cache
+  // This means mobile users always get fresh JS/CSS on reload
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request).then((res) => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request).then((res) => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });

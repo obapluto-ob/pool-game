@@ -1,4 +1,4 @@
-// FELTORA Phone System v3
+// FELTORA Phone System v4
 (function() {
   var phoneOpen = false;
   var batteryLevel = 100;
@@ -8,6 +8,34 @@
   var radioAudio = null;
   var currentStation = null;
   var PAYSTACK_KEY = 'pk_live_843fc3c7f2b2b12acf9de27e102dcb8ab3229136';
+  var userCountry = 'KE'; // default Kenya, updated by geo fetch
+
+  // ── Geo detection (ipapi.co — free, no key, 1000/day) ────────────
+  function detectCountry() {
+    fetch('https://ipapi.co/json/')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        userCountry = d.country_code || 'KE';
+        // Update tip button label based on country
+        var payBtn = document.getElementById('phone-tip-pay');
+        if (payBtn) {
+          var methods = getTipPaymentMethods(userCountry);
+          var methodsEl = payBtn.querySelector('.tip-pay-methods');
+          if (methodsEl) methodsEl.textContent = methods.label;
+        }
+      }).catch(function() {});
+  }
+
+  function getTipPaymentMethods(country) {
+    var africa = ['KE','NG','GH','ZA','TZ','UG','RW','ET','SN','CI'];
+    var isAfrica = africa.indexOf(country) !== -1;
+    if (country === 'KE') return { currency: 'KES', channels: ['card','mobile_money','bank'], label: 'M-Pesa · Card · Bank' };
+    if (country === 'GH') return { currency: 'GHS', channels: ['card','mobile_money'], label: 'Card · Mobile Money' };
+    if (country === 'NG') return { currency: 'NGN', channels: ['card','bank','ussd'], label: 'Card · Bank · USSD' };
+    if (country === 'ZA') return { currency: 'ZAR', channels: ['card','bank'], label: 'Card · Bank' };
+    if (isAfrica)         return { currency: 'USD', channels: ['card','mobile_money'], label: 'Card · Mobile Money' };
+    return { currency: 'USD', channels: ['card'], label: 'Card · Apple Pay · Google Pay' };
+  }
 
   var KENYA_STATIONS = [
     { name: 'Capital FM',    url: 'https://stream.zeno.fm/0r0xa792kwzuv', emoji: '🎵' },
@@ -114,14 +142,30 @@
   }
 
 
-  // ── Storage ──────────────────────────────────────────────────────
+  // ── Storage helpers ──────────────────────────────────────────────
   var FRIENDS_KEY  = 'feltora-friends';
   var MESSAGES_KEY = 'feltora-messages';
   var FCHAT_KEY    = 'feltora-fchat';
   var REPORTS_KEY  = 'feltora-reports';
+  var ORION_KEY    = 'feltora-orion-history';
+  var UNREAD_KEY   = 'feltora-unread';
+  var REACTIONS_KEY= 'feltora-reactions';
+  var ONLINE_KEY   = 'feltora-online';
+  var MSG_CAP      = 100; // max DMs per conversation
+
+  // localStorage safe write — warns user if storage is full
+  function lsSet(key, val) {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+      return true;
+    } catch(e) {
+      showToast('Storage full! Delete old messages to free space.');
+      return false;
+    }
+  }
 
   function getFriends() { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY) || '[]'); } catch(e) { return []; } }
-  function saveFriends(l) { try { localStorage.setItem(FRIENDS_KEY, JSON.stringify(l)); } catch(e) {} }
+  function saveFriends(l) { lsSet(FRIENDS_KEY, l); }
 
   function getMessages(fid) {
     try { var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'); return a[fid] || []; } catch(e) { return []; }
@@ -131,9 +175,83 @@
       var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
       if (!a[fid]) a[fid] = [];
       a[fid].push(msg);
-      localStorage.setItem(MESSAGES_KEY, JSON.stringify(a));
+      // cap at MSG_CAP per conversation
+      if (a[fid].length > MSG_CAP) a[fid] = a[fid].slice(-MSG_CAP);
+      lsSet(MESSAGES_KEY, a);
     } catch(e) {}
   }
+
+  // ── Unread badge counts ──────────────────────────────────────────
+  function getUnread() { try { return JSON.parse(localStorage.getItem(UNREAD_KEY) || '{}'); } catch(e) { return {}; } }
+  function markUnread(fid) {
+    var u = getUnread(); u[fid] = (u[fid] || 0) + 1; lsSet(UNREAD_KEY, u);
+    updateUnreadBadges();
+  }
+  function clearUnread(fid) {
+    var u = getUnread(); delete u[fid]; lsSet(UNREAD_KEY, u);
+    updateUnreadBadges();
+  }
+  function updateUnreadBadges() {
+    var u = getUnread();
+    var total = Object.values(u).reduce(function(s,v){ return s+v; }, 0);
+    // badge on contacts app icon
+    document.querySelectorAll('[data-open="contacts"]').forEach(function(el) {
+      var badge = el.querySelector('.app-badge');
+      if (total > 0) {
+        if (!badge) { badge = document.createElement('span'); badge.className = 'app-badge'; el.style.position='relative'; el.appendChild(badge); }
+        badge.textContent = total > 9 ? '9+' : total;
+      } else if (badge) badge.remove();
+    });
+    // per-contact unread dot in contact list
+    document.querySelectorAll('.phone-contact-row').forEach(function(row) {
+      var fid = row.dataset.friend;
+      var dot = row.querySelector('.contact-unread-dot');
+      if (u[fid] > 0) {
+        if (!dot) { dot = document.createElement('span'); dot.className = 'contact-unread-dot'; row.appendChild(dot); }
+        dot.textContent = u[fid];
+      } else if (dot) dot.remove();
+    });
+  }
+
+  // ── Online status (localStorage heartbeat) ───────────────────────
+  function setOnline() {
+    var me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+    if (!me) return;
+    try {
+      var o = JSON.parse(localStorage.getItem(ONLINE_KEY) || '{}');
+      o[me] = Date.now();
+      localStorage.setItem(ONLINE_KEY, JSON.stringify(o));
+    } catch(e) {}
+  }
+  function isOnline(username) {
+    try {
+      var o = JSON.parse(localStorage.getItem(ONLINE_KEY) || '{}');
+      return o[username] && (Date.now() - o[username]) < 120000; // 2 min window
+    } catch(e) { return false; }
+  }
+
+  // ── Message reactions ────────────────────────────────────────────
+  var REACTION_EMOJIS = ['👍','❤️','😂','😮','🔥','🎱'];
+  function getReactions(convId) {
+    try { var r = JSON.parse(localStorage.getItem(REACTIONS_KEY) || '{}'); return r[convId] || {}; } catch(e) { return {}; }
+  }
+  function addReaction(convId, msgTs, emoji) {
+    try {
+      var r = JSON.parse(localStorage.getItem(REACTIONS_KEY) || '{}');
+      if (!r[convId]) r[convId] = {};
+      var key = String(msgTs);
+      if (!r[convId][key]) r[convId][key] = {};
+      var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
+      r[convId][key][me] = emoji;
+      lsSet(REACTIONS_KEY, r);
+    } catch(e) {}
+  }
+
+  // ── Orion history persistence ────────────────────────────────────
+  function loadOrionHistory() {
+    try { return JSON.parse(localStorage.getItem(ORION_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function saveOrionHistory(h) { lsSet(ORION_KEY, h.slice(-20)); }
 
   function addFriend(username) {
     var me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
@@ -166,24 +284,25 @@
     var el = document.getElementById('fchat-rooms');
     if (!el) return;
     var rooms = getFChatRooms();
-    var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
     if (!rooms.length) {
-      // seed default rooms
       rooms = [
-        { id: 'general', name: '🎱 General', desc: 'Everyone welcome' },
-        { id: 'wins',    name: '🏆 Wins',    desc: 'Share your victories' },
-        { id: 'trash',   name: '🔥 Trash Talk', desc: 'Keep it fun' }
+        { id: 'general', name: '\uD83C\uDFB1 General', desc: 'Everyone welcome' },
+        { id: 'wins',    name: '\uD83C\uDFC6 Wins',    desc: 'Share your victories' },
+        { id: 'trash',   name: '\uD83D\uDD25 Trash Talk', desc: 'Keep it fun' }
       ];
       saveFChatRooms(rooms);
     }
+    var u = getUnread();
     el.innerHTML = rooms.map(function(r) {
       var msgs = getFChatMessages(r.id);
       var last = msgs.length ? msgs[msgs.length-1] : null;
+      var unreadCount = u['fchat-' + r.id] || 0;
+      var badge = unreadCount > 0 ? '<span class="fchat-unread-badge">' + (unreadCount > 9 ? '9+' : unreadCount) + '</span>' : '';
       return '<div class="fchat-room-row" data-room-id="' + r.id + '" data-room-name="' + r.name + '">'
         + '<div class="fchat-room-icon">' + r.name.slice(0,2) + '</div>'
         + '<div class="fchat-room-info"><strong>' + r.name + '</strong>'
-        + '<small>' + (last ? last.from + ': ' + last.text.slice(0,30) : r.desc) + '</small></div>'
-        + '</div>';
+        + '<small>' + (last ? last.from + ': ' + (last.voice ? '\uD83C\uDFA4 Voice note' : last.text.slice(0,30)) : r.desc) + '</small></div>'
+        + badge + '</div>';
     }).join('');
   }
 
@@ -204,21 +323,35 @@
     if (!el) return;
     var msgs = getFChatMessages(roomId);
     var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
+    var reactions = getReactions('fchat-' + roomId);
+    // clear unread for this room
+    var u = getUnread(); delete u['fchat-' + roomId]; lsSet(UNREAD_KEY, u);
     el.innerHTML = msgs.length ? msgs.map(function(m) {
       var mine = m.from === me;
-      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + m.from + '" data-text="' + encodeURIComponent(m.text) + '" title="Report">⚑</button>' : '';
-      return '<div class="fchat-msg ' + (mine ? 'mine' : 'theirs') + '">'
+      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + m.from + '" data-text="' + encodeURIComponent(m.text || '') + '" title="Report">\u2691</button>' : '';
+      var msgReactions = reactions[String(m.ts)] || {};
+      var reactionCounts = {};
+      Object.values(msgReactions).forEach(function(e) { reactionCounts[e] = (reactionCounts[e]||0)+1; });
+      var reactionBar = Object.keys(reactionCounts).length
+        ? '<div class="msg-reactions">' + Object.keys(reactionCounts).map(function(e) {
+            return '<span class="msg-reaction">' + e + ' ' + reactionCounts[e] + '</span>';
+          }).join('') + '</div>' : '';
+      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="fchat-' + roomId + '" title="React">\uD83D\uDE42</button>';
+      var content = m.voice
+        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
+        : '<span class="fchat-msg-text">' + (m.text || '') + '</span>';
+      return '<div class="fchat-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
         + (!mine ? '<span class="fchat-msg-from">' + m.from + '</span>' : '')
-        + '<span class="fchat-msg-text">' + m.text + '</span>'
+        + content
         + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
-        + reportBtn + '</div>';
-    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:20px;">No messages yet. Say hi! 👋</p>';
+        + reactionBar + reactBtn + reportBtn + '</div>';
+    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:20px;">No messages yet. Say hi! \uD83D\uDC4B</p>';
     el.scrollTop = el.scrollHeight;
   }
 
 
   // ── Orion AI ─────────────────────────────────────────────────────
-  var orionHistory = [];
+  var orionHistory = loadOrionHistory();
 
   function orionAddMessage(role, text) {
     var el = document.getElementById('orion-messages');
@@ -236,34 +369,25 @@
     if (!input || !input.value.trim()) return;
     var text = input.value.trim();
     input.value = '';
-    if (isAbusive(text)) {
-      orionAddMessage('system', '⚠️ Please keep it respectful.');
-      return;
-    }
+    if (isAbusive(text)) { orionAddMessage('system', '⚠️ Please keep it respectful.'); return; }
     orionAddMessage('user', text);
     orionHistory.push({ role: 'user', content: text });
-    // typing indicator
+    saveOrionHistory(orionHistory);
     var el = document.getElementById('orion-messages');
     var typing = document.createElement('div');
     typing.className = 'orion-msg assistant orion-typing';
     typing.innerHTML = '<span class="orion-msg-label">✨ Orion</span><p>Thinking<span class="orion-dots">...</span></p>';
-    if (el) el.appendChild(typing);
-    if (el) el.scrollTop = el.scrollHeight;
-
-    var messages = [
-      { role: 'system', content: 'You are Orion, a friendly AI assistant built into FELTORA, a browser-based 8-ball pool game. Be helpful, concise, and fun. Keep responses short (under 120 words).' }
-    ].concat(orionHistory.slice(-8));
-
-    // pollinations.ai — free, no API key needed
+    if (el) { el.appendChild(typing); el.scrollTop = el.scrollHeight; }
+    var messages = [{ role: 'system', content: 'You are Orion, a friendly AI assistant built into FELTORA, a browser-based 8-ball pool game. Be helpful, concise, and fun. Keep responses short (under 120 words).' }]
+      .concat(orionHistory.slice(-8));
     var prompt = messages.map(function(m) { return m.role + ': ' + m.content; }).join('\n');
     var apiUrl = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=openai&seed=' + Math.floor(Math.random()*9999);
-    fetch(apiUrl)
-    .then(function(r) { return r.text(); })
-    .then(function(reply) {
+    fetch(apiUrl).then(function(r) { return r.text(); }).then(function(reply) {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
       reply = reply.trim().slice(0, 300);
       if (!reply) throw new Error('empty');
       orionHistory.push({ role: 'assistant', content: reply });
+      saveOrionHistory(orionHistory);
       orionAddMessage('assistant', reply);
     }).catch(function() {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
@@ -276,6 +400,7 @@
       ];
       var reply = tips[Math.floor(Math.random() * tips.length)];
       orionHistory.push({ role: 'assistant', content: reply });
+      saveOrionHistory(orionHistory);
       orionAddMessage('assistant', reply);
     });
   }
@@ -289,16 +414,25 @@
       list.innerHTML = '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.68rem;padding:20px 12px;">No contacts yet.<br>Follow players from the community feed.</p>';
       return;
     }
+    var u = getUnread();
     list.innerHTML = friends.map(function(f) {
-      return '<div class="phone-contact-row">'
-        + '<div class="phone-contact-avatar">' + f.slice(0,1).toUpperCase() + '</div>'
-        + '<div class="phone-contact-info"><strong>' + f + '</strong><small>FELTORA player</small></div>'
+      var online = isOnline(f);
+      var unread = u[f] || 0;
+      var statusDot = '<span class="contact-status-dot ' + (online ? 'online' : 'offline') + '"></span>';
+      var unreadBadge = unread > 0 ? '<span class="contact-unread-dot">' + (unread > 9 ? '9+' : unread) + '</span>' : '';
+      return '<div class="phone-contact-row" data-friend="' + f + '">'
+        + '<div class="phone-contact-avatar" style="position:relative;">' + f.slice(0,1).toUpperCase() + statusDot + '</div>'
+        + '<div class="phone-contact-info"><strong>' + f + '</strong><small>' + (online ? 'Online now' : 'FELTORA player') + '</small></div>'
         + '<div class="phone-contact-actions">'
-        + '<button class="phone-action-btn phone-call-btn" data-friend="' + f + '" title="Call">📞</button>'
-        + '<button class="phone-action-btn phone-msg-btn" data-friend="' + f + '" title="Message">💬</button>'
-        + '</div></div>';
+        + '<button class="phone-action-btn phone-call-btn" data-friend="' + f + '" title="Call">&#x260E;</button>'
+        + '<button class="phone-action-btn phone-voice-btn" data-friend="' + f + '" title="Voice note">&#x1F3A4;</button>'
+        + '<button class="phone-action-btn phone-msg-btn" data-friend="' + f + '" title="Message">&#x1F4AC;</button>'
+        + '</div>' + unreadBadge + '</div>';
     }).join('');
   }
+
+  // typing indicator state per friend
+  var typingTimers = {};
 
   function renderChat(friendId) {
     var chatView = document.getElementById('phone-chat-view');
@@ -306,20 +440,80 @@
     var chatMessages = document.getElementById('phone-chat-messages');
     if (!chatView || !chatMessages) return;
     if (chatName) chatName.textContent = friendId;
+    clearUnread(friendId);
     var msgs = getMessages(friendId);
     var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
+    var reactions = getReactions('dm-' + friendId);
     chatMessages.innerHTML = msgs.length ? msgs.map(function(m) {
       var mine = m.from === me;
-      return '<div class="phone-msg ' + (mine ? 'mine' : 'theirs') + '">'
-        + '<span>' + m.text + '</span>'
+      var msgReactions = reactions[String(m.ts)] || {};
+      var reactionCounts = {};
+      Object.values(msgReactions).forEach(function(e) { reactionCounts[e] = (reactionCounts[e]||0)+1; });
+      var reactionBar = Object.keys(reactionCounts).length
+        ? '<div class="msg-reactions">' + Object.keys(reactionCounts).map(function(e) {
+            return '<span class="msg-reaction">' + e + ' ' + reactionCounts[e] + '</span>';
+          }).join('') + '</div>' : '';
+      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="dm-' + friendId + '" title="React">&#x1F642;</button>';
+      var content = m.voice
+        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
+        : '<span>' + m.text + '</span>';
+      return '<div class="phone-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
+        + content
         + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
-        + '</div>';
-    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:16px;">Say hi! 👋</p>';
+        + reactionBar + reactBtn + '</div>';
+    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:16px;">Say hi! \uD83D\uDC4B</p>';
     chatMessages.scrollTop = chatMessages.scrollHeight;
     chatView.dataset.friend = friendId;
     var contacts = document.getElementById('phone-contacts-list');
     if (contacts) contacts.style.display = 'none';
     chatView.style.display = 'flex';
+  }
+
+  // Show typing indicator in DM chat
+  function showTypingIndicator(chatMessagesEl) {
+    var existing = chatMessagesEl.querySelector('.typing-indicator');
+    if (existing) return;
+    var div = document.createElement('div');
+    div.className = 'phone-msg theirs typing-indicator';
+    div.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    chatMessagesEl.appendChild(div);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+  function hideTypingIndicator(chatMessagesEl) {
+    var existing = chatMessagesEl.querySelector('.typing-indicator');
+    if (existing) existing.remove();
+  }
+
+  // Show reaction picker popup
+  function showReactionPicker(msgEl, ts, convId) {
+    var existing = document.querySelector('.reaction-picker');
+    if (existing) existing.remove();
+    var picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.innerHTML = REACTION_EMOJIS.map(function(e) {
+      return '<button class="reaction-pick-btn" data-emoji="' + e + '">' + e + '</button>';
+    }).join('');
+    msgEl.appendChild(picker);
+    picker.addEventListener('click', function(ev) {
+      var btn = ev.target.closest('.reaction-pick-btn');
+      if (!btn) return;
+      addReaction(convId, ts, btn.dataset.emoji);
+      picker.remove();
+      // re-render the right view
+      if (convId.startsWith('fchat-')) {
+        var roomId = convId.replace('fchat-', '');
+        renderFChatMessages(roomId);
+      } else {
+        var fid = convId.replace('dm-', '');
+        renderChat(fid);
+      }
+    });
+    // close on outside click
+    setTimeout(function() {
+      document.addEventListener('click', function close(e) {
+        if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); }
+      });
+    }, 50);
   }
 
 
@@ -438,11 +632,13 @@
   }
 
   function triggerPaystack(amount, email) {
+    var geo = getTipPaymentMethods(userCountry);
     var handler = PaystackPop.setup({
       key: PAYSTACK_KEY,
       email: email,
       amount: amount * 100,
-      currency: 'KES',
+      currency: geo.currency,
+      channels: geo.channels,
       ref: 'FELTORA-TIP-' + Date.now(),
       metadata: {
         custom_fields: [{ display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }]
@@ -454,7 +650,7 @@
           tipView.innerHTML = '<div style="text-align:center;padding:32px 16px;">'
             + '<div style="font-size:3rem;margin-bottom:12px;">&#x1F917;</div>'
             + '<h3 style="color:var(--accent);font:800 1rem/1 system-ui,sans-serif;margin:0 0 8px;">Thank you!</h3>'
-            + '<p style="color:var(--muted);font:400 0.72rem/1.5 system-ui,sans-serif;margin:0;">Your tip of KES ' + amount.toLocaleString() + ' was received. You are a legend.</p>'
+            + '<p style="color:var(--muted);font:400 0.72rem/1.5 system-ui,sans-serif;margin:0;">Your tip of ' + geo.currency + ' ' + amount.toLocaleString() + ' was received. You are a legend.</p>'
             + '</div>';
         }
       },
@@ -628,6 +824,123 @@
   }
 
   // -- Settings toggles
+  // ── Wallpapers ───────────────────────────────────────────────────
+  var WALLPAPERS = [
+    { id: 'default',  label: 'Dark',      style: 'background:#050a08;' },
+    { id: 'midnight', label: 'Midnight',  style: 'background:linear-gradient(160deg,#0d1f33,#050a08);' },
+    { id: 'forest',   label: 'Forest',    style: 'background:linear-gradient(160deg,#0a2e1a,#050a08);' },
+    { id: 'aurora',   label: 'Aurora',    style: 'background:linear-gradient(160deg,#0d2233,#1a0d33,#050a08);' },
+    { id: 'sunset',   label: 'Sunset',    style: 'background:linear-gradient(160deg,#2e1a0a,#1a0a0a,#050a08);' },
+    { id: 'ocean',    label: 'Ocean',     style: 'background:linear-gradient(160deg,#0a1a2e,#0a2e2e,#050a08);' },
+    { id: 'neon',     label: 'Neon',      style: 'background:linear-gradient(160deg,#0a0a1a,#1a0a2e,#050a08);' },
+    { id: 'gold',     label: 'Gold',      style: 'background:linear-gradient(160deg,#1a1400,#2e2000,#050a08);' }
+  ];
+
+  function applyWallpaper(id) {
+    var wp = WALLPAPERS.find(function(w) { return w.id === id; }) || WALLPAPERS[0];
+    var wallEl = document.querySelector('.phone-wallpaper');
+    if (wallEl) wallEl.setAttribute('style', wp.style + 'position:absolute;inset:0;z-index:0;');
+    var phoneScreen = document.querySelector('.phone-screen');
+    if (phoneScreen) phoneScreen.style.background = wp.style.replace('background:', '').replace(';','');
+    try { localStorage.setItem('feltora-wallpaper', id); } catch(e) {}
+  }
+
+  function loadWallpaper() {
+    try { return localStorage.getItem('feltora-wallpaper') || 'default'; } catch(e) { return 'default'; }
+  }
+
+  function buildWallpaperPicker() {
+    var existing = document.getElementById('ps-wallpaper-section');
+    if (existing) return;
+    var settingsList = document.getElementById('phone-settings-list');
+    if (!settingsList) return;
+    var section = document.createElement('div');
+    section.id = 'ps-wallpaper-section';
+    var current = loadWallpaper();
+    section.innerHTML = '<div class="phone-settings-section">Wallpaper</div>'
+      + '<div class="wallpaper-grid">'
+      + WALLPAPERS.map(function(w) {
+          return '<button class="wallpaper-btn' + (w.id === current ? ' active' : '') + '" data-wp="' + w.id + '" style="' + w.style + '">'
+            + '<span>' + w.label + '</span></button>';
+        }).join('')
+      + '</div>'
+      + '<div class="phone-settings-section">Account</div>'
+      + '<div class="phone-setting-row phone-setting-info" id="ps-username-row"><span>Username</span><span id="ps-username-val" style="color:var(--accent);font-size:0.68rem;"></span></div>'
+      + '<div class="phone-setting-row phone-setting-info"><span>Version</span><span style="color:rgba(255,255,255,0.3);font-size:0.68rem;">FELTORA v4.0</span></div>'
+      + '<button class="phone-setting-danger-btn" id="ps-delete-account">Delete Account</button>';
+    settingsList.appendChild(section);
+    section.querySelectorAll('.wallpaper-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        section.querySelectorAll('.wallpaper-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        applyWallpaper(btn.dataset.wp);
+        if (window.FeltoraAuth && window.FeltoraAuth.update) window.FeltoraAuth.update({ wallpaper: btn.dataset.wp });
+      });
+    });
+    var delBtn = document.getElementById('ps-delete-account');
+    if (delBtn) delBtn.addEventListener('click', function() {
+      if (!confirm('Delete your account? This cannot be undone.')) return;
+      var me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+      if (!me) return;
+      // wipe account from feltora-accounts
+      try {
+        var accounts = JSON.parse(localStorage.getItem('feltora-accounts') || '{}');
+        delete accounts[me];
+        localStorage.setItem('feltora-accounts', JSON.stringify(accounts));
+      } catch(e) {}
+      window.FeltoraAuth.logout();
+      showToast('Account deleted.');
+      setTimeout(function() { window.location.reload(); }, 1500);
+    });
+  }
+
+  // ── Voice notes (MediaRecorder → base64) ────────────────────────
+  var mediaRecorder = null;
+  var voiceChunks = [];
+  var voiceTarget = null; // { type: 'dm'|'fchat', id: string }
+
+  function startVoiceNote(target) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast('Voice notes not supported on this browser.'); return;
+    }
+    voiceTarget = target;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      voiceChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) voiceChunks.push(e.data); };
+      mediaRecorder.onstop = function() {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        var blob = new Blob(voiceChunks, { type: 'audio/webm' });
+        // cap at ~500KB (about 30s)
+        if (blob.size > 512000) { showToast('Voice note too long. Max ~30 seconds.'); return; }
+        var reader = new FileReader();
+        reader.onload = function() {
+          var base64 = reader.result;
+          var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
+          var msg = { from: me, voice: base64, text: '', ts: Date.now() };
+          if (voiceTarget.type === 'dm') {
+            saveMessage(voiceTarget.id, msg);
+            renderChat(voiceTarget.id);
+          } else {
+            saveFChatMessage(voiceTarget.id, msg);
+            renderFChatMessages(voiceTarget.id);
+          }
+          showToast('Voice note sent!');
+        };
+        reader.readAsDataURL(blob);
+      };
+      mediaRecorder.start();
+      showToast('Recording... tap mic again to send.');
+      // auto-stop after 30s
+      setTimeout(function() { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 30000);
+    }).catch(function() { showToast('Microphone access denied.'); });
+  }
+
+  function stopVoiceNote() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  }
+
+  // ── Settings ─────────────────────────────────────────────────────
   function initPhoneSettings() {
     var dark = document.getElementById('ps-dark');
     var motion = document.getElementById('ps-motion');
@@ -646,6 +959,7 @@
       var btn = document.getElementById('music-toggle');
       if (btn) btn.click();
     });
+    buildWallpaperPicker();
   }
 
   // -- Play button inside phone
@@ -666,20 +980,39 @@
   function initPhoneApp() {
     var phoneApp = document.getElementById('phone-app');
     if (!phoneApp) return;
+
+    // typing indicator on DM input
+    var chatInput = document.getElementById('phone-chat-input');
+    if (chatInput) {
+      chatInput.addEventListener('input', function() {
+        var chatView = document.getElementById('phone-chat-view');
+        var chatMessages = document.getElementById('phone-chat-messages');
+        if (!chatView || !chatMessages) return;
+        showTypingIndicator(chatMessages);
+        clearTimeout(typingTimers[chatView.dataset.friend]);
+        typingTimers[chatView.dataset.friend] = setTimeout(function() {
+          hideTypingIndicator(chatMessages);
+        }, 1500);
+      });
+    }
+
     phoneApp.addEventListener('click', function(e) {
       var icon = e.target.closest('[data-open]');
       var back = e.target.closest('[data-back]');
       var tab  = e.target.closest('.pft-tab');
-      var callBtn = e.target.closest('.phone-call-btn');
-      var msgBtn  = e.target.closest('.phone-msg-btn');
-      var stationBtn = e.target.closest('.radio-station-btn');
-      var radioBtn   = e.target.closest('#radio-play-btn');
-      var sendBtn    = e.target.closest('#phone-chat-send');
-      var chatBack   = e.target.closest('#phone-chat-back');
-      var fchatRoomRow = e.target.closest('.fchat-room-row');
-      var fchatBack  = e.target.closest('#fchat-room-back');
-      var fchatSend  = e.target.closest('#fchat-send');
-      var reportBtn  = e.target.closest('.fchat-report-btn');
+      var callBtn     = e.target.closest('.phone-call-btn');
+      var msgBtn      = e.target.closest('.phone-msg-btn');
+      var voiceBtn    = e.target.closest('.phone-voice-btn');
+      var stationBtn  = e.target.closest('.radio-station-btn');
+      var radioBtn    = e.target.closest('#radio-play-btn');
+      var sendBtn     = e.target.closest('#phone-chat-send');
+      var chatBack    = e.target.closest('#phone-chat-back');
+      var fchatRoomRow= e.target.closest('.fchat-room-row');
+      var fchatBack   = e.target.closest('#fchat-room-back');
+      var fchatSend   = e.target.closest('#fchat-send');
+      var fchatVoice  = e.target.closest('#fchat-voice-btn');
+      var reportBtn   = e.target.closest('.fchat-report-btn');
+      var reactBtn    = e.target.closest('.msg-react-btn');
 
       if (icon) {
         var app = icon.dataset.open;
@@ -704,6 +1037,15 @@
       }
       if (callBtn) mockCall(callBtn.dataset.friend);
       if (msgBtn)  renderChat(msgBtn.dataset.friend);
+      if (voiceBtn) {
+        var fid = voiceBtn.dataset.friend;
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          stopVoiceNote();
+        } else {
+          renderChat(fid);
+          startVoiceNote({ type: 'dm', id: fid });
+        }
+      }
       if (stationBtn) playStation({ name: stationBtn.dataset.name, url: stationBtn.dataset.url });
       if (radioBtn) { if (radioPlaying) stopRadio(); else if (currentStation) playStation(currentStation); }
       if (chatBack) {
@@ -719,13 +1061,13 @@
         var txt = input.value.trim();
         if (isAbusive(txt)) { showToast('Keep it respectful please.'); return; }
         var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
+        var chatMessages = document.getElementById('phone-chat-messages');
+        if (chatMessages) hideTypingIndicator(chatMessages);
         saveMessage(chatView.dataset.friend, { from: me, text: txt, ts: Date.now() });
         input.value = '';
         renderChat(chatView.dataset.friend);
       }
-      if (fchatRoomRow) {
-        openFChatRoom(fchatRoomRow.dataset.roomId, fchatRoomRow.dataset.roomName);
-      }
+      if (fchatRoomRow) openFChatRoom(fchatRoomRow.dataset.roomId, fchatRoomRow.dataset.roomName);
       if (fchatBack) {
         var rv = document.getElementById('fchat-room-view');
         var rl = document.getElementById('fchat-rooms');
@@ -743,17 +1085,29 @@
         inp.value = '';
         renderFChatMessages(rv.dataset.room);
       }
-      if (reportBtn) {
-        reportUser(reportBtn.dataset.from, decodeURIComponent(reportBtn.dataset.text));
+      if (fchatVoice) {
+        var rv2 = document.getElementById('fchat-room-view');
+        if (!rv2) return;
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          stopVoiceNote();
+        } else {
+          startVoiceNote({ type: 'fchat', id: rv2.dataset.room });
+        }
+      }
+      if (reportBtn) reportUser(reportBtn.dataset.from, decodeURIComponent(reportBtn.dataset.text));
+      if (reactBtn) {
+        var msgEl = reactBtn.closest('.fchat-msg, .phone-msg');
+        if (msgEl) showReactionPicker(msgEl, reactBtn.dataset.ts, reactBtn.dataset.conv);
       }
     });
+
     phoneApp.addEventListener('keydown', function(e) {
       if (e.key !== 'Enter') return;
       var ci = document.getElementById('phone-chat-input');
       var fi = document.getElementById('fchat-input');
       var oi = document.getElementById('orion-input');
-      if (document.activeElement === ci) document.getElementById('phone-chat-send') && document.getElementById('phone-chat-send').click();
-      if (document.activeElement === fi) document.getElementById('fchat-send') && document.getElementById('fchat-send').click();
+      if (document.activeElement === ci) { var s = document.getElementById('phone-chat-send'); if (s) s.click(); }
+      if (document.activeElement === fi) { var fs = document.getElementById('fchat-send'); if (fs) fs.click(); }
       if (document.activeElement === oi) orionSend();
     });
   }
@@ -762,6 +1116,7 @@
   document.addEventListener('DOMContentLoaded', function() {
     initBattery();
     fetchWeather();
+    detectCountry();
     updateStatusBar();
     initGameFAB();
     initCommunityToggle();
@@ -769,14 +1124,20 @@
     initFChatNewGroup();
     initPhonePlayBtn();
     initPhoneApp();
+    applyWallpaper(loadWallpaper());
+    setOnline();
     setInterval(updateStatusBar, 30000);
     setInterval(fetchWeather, 600000);
+    setInterval(setOnline, 60000);
+    setInterval(updateUnreadBadges, 10000);
   });
 
   window.FeltoraPhone = {
     addFriend: addFriend,
     getFriends: getFriends,
     renderContacts: renderContacts,
-    showToast: showToast
+    showToast: showToast,
+    startVoiceNote: startVoiceNote,
+    stopVoiceNote: stopVoiceNote
   };
 })();

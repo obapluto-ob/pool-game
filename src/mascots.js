@@ -82,46 +82,49 @@
     }
   };
   const legacyIds = { A: 'marlow', K: 'ivy', Q: 'rook', J: 'pip' };
-  let nextId = 0;
 
   function resolve(id) {
     const key = legacyIds[id] || id;
     return characters[key] ? { id: key, ...characters[key] } : { id: 'marlow', ...characters.marlow };
   }
 
+  // DiceBear pixel-art avatars — free, no API key, unique per character seed
+  // Each character gets a fixed seed so they always look the same
+  var DICEBEAR_SEEDS = {
+    marlow: 'feltora-marlow-host',
+    ivy:    'feltora-ivy-tactician',
+    rook:   'feltora-rook-veteran',
+    pip:    'feltora-pip-trickshot',
+    zara:   'feltora-zara-hustler',
+    knox:   'feltora-knox-enforcer',
+    lena:   'feltora-lena-sharpshooter',
+    dex:    'feltora-dex-wildcard'
+  };
+
+  // Returns an <img> tag with DiceBear pixel-art avatar
+  // Falls back to initials SVG if image fails to load
   function render(id) {
     const character = resolve(id);
-    const gradientId = `feltora-mascot-${++nextId}`;
-    return `<svg class="mascot-art" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-      <defs>
-        <radialGradient id="${gradientId}" cx="35%" cy="24%" r="80%">
-          <stop offset="0" stop-color="#28523b"/>
-          <stop offset="1" stop-color="#0b1812"/>
-        </radialGradient>
-      </defs>
-      <circle cx="50" cy="50" r="48" fill="url(#${gradientId})"/>
-      <circle cx="50" cy="50" r="45" fill="none" stroke="#d6a84b" stroke-width="1.5" opacity=".8"/>
-      <path d="M17 100q3-25 20-30h26q17 5 20 30" fill="#102b1e" stroke="#d6a84b" stroke-width="2"/>
-      <path d="M40 73l10 8 10-8 5 6-15 12-15-12z" fill="#d6a84b"/>
-      <g fill="${character.tone}" stroke="#e0b955" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
-        ${character.ears}
-        ${character.head}
-      </g>
-      <g fill="#e0b955" opacity=".72">${character.innerEars}</g>
-      <path d="M30 43q20-18 40 0l-3 25q-17 19-34 0z" fill="#14553a" opacity=".6"/>
-      <g fill="none" stroke="#f4e3b2" stroke-width="2.4" stroke-linecap="round">${character.eyes}</g>
-      <g fill="#f5e8c8">${character.pupils}</g>
-      <g fill="#d8c99e" stroke="#e0b955" stroke-width="1.5" stroke-linejoin="round">${character.muzzle}</g>
-      <path d="M47 64q3 3 6 0" fill="none" stroke="#45351d" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="50" cy="89" r="7" fill="#0a120e" stroke="#d6a84b" stroke-width="1.5"/>
-      <text x="50" y="92" text-anchor="middle" fill="#f1d98c" font-size="7" font-family="Georgia,serif" font-weight="700">8</text>
-      <path d="M22 76q-5 7-5 14m61-14q5 7 5 14" fill="none" stroke="#d6a84b" stroke-width="1" opacity=".65"/>
-    </svg>`;
+    const seed = DICEBEAR_SEEDS[character.id] || ('feltora-' + character.id);
+    const url = `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(seed)}&backgroundColor=0a1a12,0d2218,111f17&radius=50`;
+    const fallbackColor = character.tone || '#1e7650';
+    const initial = character.name ? character.name[0].toUpperCase() : '?';
+    return `<span class="mascot-art dicebear-wrap" data-id="${character.id}" style="display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:${fallbackColor};">`
+      + `<img src="${url}" alt="${character.name}" style="width:100%;height:100%;display:block;" loading="lazy" onerror="this.style.display='none';this.parentNode.setAttribute('data-fallback','${initial}');this.parentNode.style.fontSize='1.4em';this.parentNode.style.fontWeight='800';this.parentNode.style.color='#f1d98c';this.parentNode.textContent='${initial}';">`
+      + `</span>`;
+  }
+
+  // For places that need a raw URL (e.g. <img src=...>)
+  function avatarUrl(id) {
+    const character = resolve(id);
+    const seed = DICEBEAR_SEEDS[character.id] || ('feltora-' + character.id);
+    return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(seed)}&backgroundColor=0a1a12,0d2218,111f17&radius=50`;
   }
 
   window.FeltoraMascots = Object.freeze({
     ids: Object.freeze(Object.keys(characters)),
     resolve,
-    render
+    render,
+    avatarUrl
   });
 })();

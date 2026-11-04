@@ -4704,3 +4704,185 @@ h1 {
 }
 .fchat-modal-btn.cancel { background: rgba(255,255,255,0.07); color: var(--muted); }
 .fchat-modal-btn.create { background: linear-gradient(135deg,#00f0a8,#00c88a); color: #050a08; }
+
+/* ── Unread badges ─────────────────────────────────────────────── */
+.app-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  background: #ff3b30;
+  color: #fff;
+  font: 700 0.55rem/1 system-ui,sans-serif;
+  min-width: 16px; height: 16px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  z-index: 2;
+}
+.contact-unread-dot {
+  background: #00f0a8;
+  color: #050a08;
+  font: 700 0.55rem/1 system-ui,sans-serif;
+  min-width: 16px; height: 16px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.fchat-unread-badge {
+  background: #00f0a8;
+  color: #050a08;
+  font: 700 0.55rem/1 system-ui,sans-serif;
+  min-width: 18px; height: 18px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Online status dots ────────────────────────────────────────── */
+.contact-status-dot {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #050a08;
+}
+.contact-status-dot.online  { background: #00f0a8; }
+.contact-status-dot.offline { background: rgba(255,255,255,0.2); }
+
+/* ── Typing indicator ──────────────────────────────────────────── */
+.typing-indicator { opacity: 0.7; }
+.typing-dots {
+  display: inline-flex; gap: 3px; align-items: center; padding: 6px 10px;
+}
+.typing-dots span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  animation: typingBounce 1.2s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce {
+  0%,60%,100% { transform: translateY(0); }
+  30% { transform: translateY(-5px); }
+}
+
+/* ── Message reactions ─────────────────────────────────────────── */
+.msg-reactions {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 4px;
+}
+.msg-reaction {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  cursor: pointer;
+}
+.msg-react-btn {
+  background: none; border: none;
+  font-size: 0.7rem; cursor: pointer;
+  opacity: 0.4; padding: 2px 4px;
+  transition: opacity 0.15s;
+}
+.msg-react-btn:hover { opacity: 1; }
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: #1a2e24;
+  border: 1px solid rgba(0,240,168,0.25);
+  border-radius: 20px;
+  padding: 6px 8px;
+  display: flex; gap: 6px;
+  z-index: 200;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.reaction-pick-btn {
+  background: none; border: none;
+  font-size: 1.1rem; cursor: pointer;
+  padding: 2px;
+  transition: transform 0.15s;
+}
+.reaction-pick-btn:hover { transform: scale(1.3); }
+
+/* ── Voice note player ─────────────────────────────────────────── */
+.voice-note-player {
+  width: 100%;
+  max-width: 200px;
+  height: 32px;
+  border-radius: 16px;
+  outline: none;
+}
+.fchat-voice-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.fchat-voice-btn:hover { background: rgba(0,240,168,0.15); }
+.fchat-voice-btn.recording { background: rgba(255,59,48,0.3); border-color: #ff3b30; animation: pulse 1s infinite; }
+
+/* ── Wallpaper picker ──────────────────────────────────────────── */
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px 12px;
+}
+.wallpaper-btn {
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 4px;
+  transition: border-color 0.15s, transform 0.15s;
+  overflow: hidden;
+}
+.wallpaper-btn span {
+  font: 600 0.52rem/1 system-ui,sans-serif;
+  color: rgba(255,255,255,0.7);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+.wallpaper-btn.active { border-color: #00f0a8; transform: scale(1.05); }
+
+/* ── Account delete button ─────────────────────────────────────── */
+.phone-setting-danger-btn {
+  width: calc(100% - 24px);
+  margin: 8px 12px;
+  padding: 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,59,48,0.4);
+  background: rgba(255,59,48,0.08);
+  color: #ff6b6b;
+  font: 600 0.78rem/1 system-ui,sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.phone-setting-danger-btn:hover { background: rgba(255,59,48,0.18); }
+
+/* ── DiceBear avatar wrapper ───────────────────────────────────── */
+.dicebear-wrap img {
+  image-rendering: pixelated;
+}
+.mascot-art {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── SVG icon base ─────────────────────────────────────────────── */
+.fi {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}

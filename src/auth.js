@@ -257,16 +257,23 @@ const Auth = (() => {
       const cloud = cloudSession();
       if (cloud) return cloud.username || session();
       const google = googleSession();
-      return google && firebaseAuthInstance && firebaseAuthInstance.currentUser
-        && firebaseAuthInstance.currentUser.uid === google.uid ? google.username : null;
+      if (!google) return null;
+      // trust the saved session — Firebase instance may not be ready yet after redirect
+      if (firebaseAuthInstance && firebaseAuthInstance.currentUser) {
+        return firebaseAuthInstance.currentUser.uid === google.uid ? google.username : null;
+      }
+      return google.username;
     },
 
     uid() {
       const cloud = cloudSession();
       if (cloud) return cloud.uid;
       const google = googleSession();
-      return google && firebaseAuthInstance && firebaseAuthInstance.currentUser
-        && firebaseAuthInstance.currentUser.uid === google.uid ? google.uid : null;
+      if (!google) return null;
+      if (firebaseAuthInstance && firebaseAuthInstance.currentUser) {
+        return firebaseAuthInstance.currentUser.uid === google.uid ? google.uid : null;
+      }
+      return google.uid;
     },
 
     async initialize() {

@@ -169,19 +169,37 @@ const Auth = (() => {
     return { ok: true, username: profile.username };
   }
 
+  async function readAuthResponse(response) {
+    const text = await response.text();
+    let result = null;
+    try {
+      result = text ? JSON.parse(text) : null;
+    } catch {}
+
+    if (!response.ok) {
+      const message = result && typeof result.error === 'string'
+        ? result.error
+        : response.status >= 500
+          ? 'Authentication server error (HTTP ' + response.status + '). Check the Vercel Function Logs for /api/auth.'
+          : 'Authentication request failed (HTTP ' + response.status + ').';
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      throw new Error('Authentication server returned an invalid response.');
+    }
+    return result;
+  }
+
   async function postAuthAction(action, data) {
     const response = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action }, data))
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(result.error || 'Authentication request failed.');
-      error.status = response.status;
-      throw error;
-    }
-    return result;
+    return readAuthResponse(response);
   }
 
   async function callAuthEndpoint(action, username, pin, profile) {
@@ -190,13 +208,7 @@ const Auth = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, username, pin, profile })
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(result.error || 'Authentication request failed.');
-      error.status = response.status;
-      throw error;
-    }
-    return result;
+    return readAuthResponse(response);
   }
 
   async function exchangeCustomToken(customToken) {

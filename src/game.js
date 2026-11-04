@@ -2454,7 +2454,7 @@ document.getElementById('btn-register').addEventListener('click', () => {
   if (!result.ok) { showAuthError('reg-error', result.error); return; }
   try { localStorage.setItem('feltora-last-user', u.trim().toLowerCase()); } catch {}
   applyAccountToLobby(u.trim().toLowerCase());
-  showScreen('lobby');
+  if (window.FeltoraOnboarding) { window.FeltoraOnboarding.open(u.trim()); } else { showScreen('lobby'); }
 });
 
 // Enter key on register fields

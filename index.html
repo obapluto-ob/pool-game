@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261104-community">
+  <link rel="stylesheet" href="css/styles.css?v=20261104-onboard">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -434,6 +434,67 @@
     </section>
 
     <!-- ── TUTORIAL OVERLAY ──────────────────────────────────── -->
+    <!-- ── ONBOARDING WIZARD ──────────────────────────────────── -->
+    <div id="onboarding-overlay" aria-modal="true" role="dialog" aria-label="Set up your profile" hidden>
+      <div id="onboarding-backdrop"></div>
+      <div id="onboarding-card">
+        <div id="onboarding-progress">
+          <span class="ob-dot active" data-step="0"></span>
+          <span class="ob-dot" data-step="1"></span>
+          <span class="ob-dot" data-step="2"></span>
+          <span class="ob-dot" data-step="3"></span>
+        </div>
+
+        <!-- Step 0: Welcome -->
+        <div class="ob-step active" id="ob-step-0">
+          <div class="ob-welcome-avatar" id="ob-welcome-art"></div>
+          <h2 class="ob-heading">Welcome, <span id="ob-welcome-name">Player</span>!</h2>
+          <p class="ob-sub">Let's set up your profile in 3 quick steps. You can always change this later.</p>
+          <button class="ob-btn-primary" id="ob-start">Let's go →</button>
+        </div>
+
+        <!-- Step 1: Pick avatar -->
+        <div class="ob-step" id="ob-step-1" hidden>
+          <p class="ob-step-label">Step 1 of 3</p>
+          <h2 class="ob-heading">Pick your avatar</h2>
+          <p class="ob-sub">This is how other players see you.</p>
+          <div class="ob-avatar-grid" id="ob-avatar-grid"></div>
+          <button class="ob-btn-primary" id="ob-avatar-next">Next →</button>
+        </div>
+
+        <!-- Step 2: Pick cue -->
+        <div class="ob-step" id="ob-step-2" hidden>
+          <p class="ob-step-label">Step 2 of 3</p>
+          <h2 class="ob-heading">Choose your cue</h2>
+          <p class="ob-sub">Your signature stick at the table.</p>
+          <div class="ob-cue-grid" id="ob-cue-grid">
+            <button class="ob-cue-btn active" data-cue="wood"><span class="ob-cue-preview" style="--cc:#d9b27a"></span><span>Wood</span></button>
+            <button class="ob-cue-btn" data-cue="black"><span class="ob-cue-preview" style="--cc:#f3f6ff"></span><span>Black</span></button>
+            <button class="ob-cue-btn" data-cue="gold"><span class="ob-cue-preview" style="--cc:#f3d27b"></span><span>Gold</span></button>
+            <button class="ob-cue-btn" data-cue="neon"><span class="ob-cue-preview" style="--cc:#16d69a"></span><span>Neon</span></button>
+            <button class="ob-cue-btn" data-cue="chrome"><span class="ob-cue-preview" style="--cc:#e8edf5"></span><span>Chrome</span></button>
+            <button class="ob-cue-btn" data-cue="crimson"><span class="ob-cue-preview" style="--cc:#e84040"></span><span>Crimson</span></button>
+          </div>
+          <button class="ob-btn-primary" id="ob-cue-next">Next →</button>
+        </div>
+
+        <!-- Step 3: Pick table -->
+        <div class="ob-step" id="ob-step-3" hidden>
+          <p class="ob-step-label">Step 3 of 3</p>
+          <h2 class="ob-heading">Pick your table</h2>
+          <p class="ob-sub">Your home felt colour.</p>
+          <div class="ob-felt-grid" id="ob-felt-grid">
+            <button class="ob-felt-btn active" data-felt="green"><span class="ob-felt-swatch" style="background:#1e6038"></span><span>Classic Green</span></button>
+            <button class="ob-felt-btn" data-felt="blue"><span class="ob-felt-swatch" style="background:#133670"></span><span>Ocean Blue</span></button>
+            <button class="ob-felt-btn" data-felt="burgundy"><span class="ob-felt-swatch" style="background:#5e1222"></span><span>Burgundy</span></button>
+            <button class="ob-felt-btn" data-felt="slate"><span class="ob-felt-swatch" style="background:#2c3a48"></span><span>Slate</span></button>
+            <button class="ob-felt-btn" data-felt="sand"><span class="ob-felt-swatch" style="background:#6e5830"></span><span>Sand</span></button>
+          </div>
+          <button class="ob-btn-primary" id="ob-finish">Done — Let's play! 🎱</button>
+        </div>
+      </div>
+    </div>
+
     <div id="tutorial-overlay" aria-modal="true" role="dialog" aria-label="How to play FELTORA">
       <div id="tutorial-backdrop"></div>
       <div id="tutorial-spotlight"></div>
@@ -461,8 +522,122 @@
               <p class="community-sub">Wins · Bugs · Ideas · Banter</p>
             </div>
           </div>
-          <button class="action-btn primary" id="community-new-post" type="button">+ Post</button>
+          <div class="community-header-actions">
+            <button class="ghost-btn" id="community-phone-toggle" type="button" aria-pressed="false" title="Phone view">📱 Phone</button>
+            <button class="action-btn primary" id="community-new-post" type="button">+ Post</button>
+          </div>
         </header>
+
+        <!-- Phone mockup view -->
+        <div id="community-phone-view" hidden>
+          <div class="phone-frame" id="phone-frame">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="phone-status-bar">
+                <span class="phone-time" id="phone-time">9:41</span>
+                <span class="phone-icons">&#x1F4F6; &#x1F50B;</span>
+              </div>
+              <div class="phone-app" id="phone-app">
+                <!-- Home screen -->
+                <div class="phone-view active" id="phone-home">
+                  <div class="phone-wallpaper"></div>
+                  <div class="phone-app-grid">
+                    <button class="phone-app-icon" data-open="feltora" aria-label="FELTORA">
+                      <span class="pai-art"><img src="assets/logo.svg" alt="" style="width:100%;height:100%;border-radius:14px;"></span>
+                      <span>FELTORA</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="messages" aria-label="Messages">
+                      <span class="pai-art pai-messages">&#x1F4AC;</span>
+                      <span>Messages</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="camera" aria-label="Camera">
+                      <span class="pai-art pai-camera">&#x1F4F7;</span>
+                      <span>Camera</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="music" aria-label="Music">
+                      <span class="pai-art pai-music">&#x1F3B5;</span>
+                      <span>Music</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="gallery" aria-label="Gallery">
+                      <span class="pai-art pai-gallery">&#x1F5BC;&#xFE0F;</span>
+                      <span>Gallery</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="settings" aria-label="Settings">
+                      <span class="pai-art pai-settings">&#x2699;&#xFE0F;</span>
+                      <span>Settings</span>
+                    </button>
+                  </div>
+                  <div class="phone-dock">
+                    <button class="phone-app-icon dock-icon" data-open="feltora" aria-label="FELTORA">
+                      <span class="pai-art"><img src="assets/logo.svg" alt="" style="width:100%;height:100%;border-radius:10px;"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- FELTORA app inside phone -->
+                <div class="phone-view" id="phone-feltora">
+                  <div class="phone-app-header">
+                    <button class="phone-back-btn" data-back="home">&#x2190;</button>
+                    <span class="phone-app-title">FELTORA</span>
+                    <span></span>
+                  </div>
+                  <div class="phone-feltora-tabs">
+                    <button class="pft-tab active" data-tab="feed">Feed</button>
+                    <button class="pft-tab" data-tab="profile">Profile</button>
+                    <button class="pft-tab" data-tab="play">Play</button>
+                  </div>
+                  <div class="phone-feltora-content">
+                    <div class="pft-panel active" id="pft-feed">
+                      <div class="phone-feed" id="phone-feed"></div>
+                    </div>
+                    <div class="pft-panel" id="pft-profile" hidden>
+                      <div class="phone-profile">
+                        <div class="phone-profile-avatar" id="phone-profile-avatar"></div>
+                        <div class="phone-profile-name" id="phone-profile-name">Player</div>
+                        <div class="phone-profile-tag" id="phone-profile-tag">@guest</div>
+                        <div class="phone-profile-stats">
+                          <div class="pps"><strong id="pps-wins">0</strong><span>Wins</span></div>
+                          <div class="pps"><strong id="pps-losses">0</strong><span>Losses</span></div>
+                          <div class="pps"><strong id="pps-frames">0</strong><span>Frames</span></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pft-panel" id="pft-play" hidden>
+                      <div class="phone-play-cta">
+                        <div class="phone-play-art" id="phone-play-art"></div>
+                        <p class="phone-play-msg">Ready to hustle?</p>
+                        <button class="ob-btn-primary" id="phone-play-btn" style="width:100%">Open Game &#x1F3B1;</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Dummy apps -->
+                <div class="phone-view" id="phone-messages">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Messages</span><span></span></div>
+                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F4AC; No messages yet.<br><small>Challenge a friend to FELTORA!</small></p></div>
+                </div>
+                <div class="phone-view" id="phone-camera">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Camera</span><span></span></div>
+                  <div class="phone-dummy-app phone-camera-view"><div class="phone-camera-lens"></div><p style="color:rgba(255,255,255,0.5);font-size:0.7rem;margin-top:8px">Tap to capture your win</p></div>
+                </div>
+                <div class="phone-view" id="phone-music">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Music</span><span></span></div>
+                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F3B5; Now playing<br><strong style="color:var(--accent)">Lounge Mode</strong><br><small>FELTORA Soundtrack</small></p></div>
+                </div>
+                <div class="phone-view" id="phone-gallery">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Gallery</span><span></span></div>
+                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F5BC;&#xFE0F; Win screenshots<br><small>Share wins to see them here</small></p></div>
+                </div>
+                <div class="phone-view" id="phone-settings">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Settings</span><span></span></div>
+                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x2699;&#xFE0F; Device settings<br><small>FELTORA v1.0</small></p></div>
+                </div>
+              </div>
+            </div>
+            <div class="phone-home-bar"></div>
+          </div>
+        </div>
 
         <div class="community-tabs" role="tablist" aria-label="Feed categories">
           <button class="community-tab active" data-feed="all" type="button" role="tab">All</button>
@@ -571,8 +746,9 @@
   <script src="src/auth.js?v=20261104-fix12" defer></script>
   <script src="src/mascots.js?v=20261103-0850" defer></script>
   <script src="src/online.js?v=20261104-fix10" defer></script>
-  <script src="src/game.js?v=20261104-community" defer></script>
+  <script src="src/game.js?v=20261104-onboard" defer></script>
   <script src="src/community.js?v=20261104-community" defer></script>
+  <script src="src/onboarding.js?v=20261104-onboard" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

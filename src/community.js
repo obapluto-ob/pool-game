@@ -44,6 +44,8 @@ function communityRenderFeed() {
   const typeLabel = { win: '🏆 Win', bug: '🐛 Bug', idea: '💡 Idea', chat: '💬 Chat' };
   feed.innerHTML = filtered.map(function(p) {
     const liked = (p.likes || []).indexOf(me || '_guest') !== -1;
+    const isVerified = p.author && p.author !== 'Guest';
+    const verifiedBadge = isVerified ? ' <span class="verified-badge" title="Registered player">&#x2714;</span>' : '';
     const canDelete = !!(me && p.author === me);
     const ago = communityTimeAgo(p.ts);
     const label = typeLabel[p.type] || '💬 Chat';
@@ -59,7 +61,7 @@ function communityRenderFeed() {
     return '<article class="feed-card" data-id="' + p.id + '">'
       + '<div class="feed-card-top">'
       + '<span class="feed-type-badge feed-type-' + p.type + '">' + label + '</span>'
-      + '<span class="feed-meta">' + escapeHtml(p.author || 'Guest') + ' &middot; ' + ago + '</span>'
+      + '<span class="feed-meta">' + escapeHtml(p.author || 'Guest') + verifiedBadge + ' &middot; ' + ago + '</span>'
       + deleteBtn
       + '</div>'
       + img

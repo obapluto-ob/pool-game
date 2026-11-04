@@ -2397,7 +2397,7 @@ function bootAuth() {
         newLink = document.createElement('button');
         newLink.id = 'auth-new-player-link';
         newLink.type = 'button';
-        newLink.textContent = 'New player? Create account';
+        newLink.textContent = 'Create or upgrade an account';
         newLink.style.cssText = 'background:none;border:none;color:var(--muted);font-size:0.78rem;cursor:pointer;padding:8px 0 0;text-decoration:underline;width:100%;text-align:center;';
         newLink.addEventListener('click', () => {
           document.getElementById('tab-register').style.display = '';
@@ -2450,15 +2450,23 @@ function showAuthError(id, msg) {
 }
 function clearAuthError(id) { document.getElementById(id).hidden = true; }
 
-document.getElementById('btn-login').addEventListener('click', () => {
+document.getElementById('btn-login').addEventListener('click', async () => {
   clearAuthError('login-error');
   const u = document.getElementById('login-username').value;
   const p = document.getElementById('login-pin').value;
-  const result = window.FeltoraAuth.login(u, p);
-  if (!result.ok) { showAuthError('login-error', result.error); return; }
-  try { localStorage.setItem('feltora-last-user', u.trim().toLowerCase()); } catch {}
-  applyAccountToLobby(u.trim().toLowerCase());
-  showScreen('lobby');
+  const button = document.getElementById('btn-login');
+  button.disabled = true;
+  try {
+    const result = await window.FeltoraAuth.login(u, p);
+    if (!result.ok) { showAuthError('login-error', result.error); return; }
+    try { localStorage.setItem('feltora-last-user', u.trim().toLowerCase()); } catch {}
+    applyAccountToLobby(u.trim().toLowerCase());
+    showScreen('lobby');
+  } catch (error) {
+    showAuthError('login-error', error.message || 'Sign-in failed. Try again.');
+  } finally {
+    button.disabled = false;
+  }
 });
 
 // Enter key on login fields
@@ -2468,17 +2476,28 @@ document.getElementById('btn-login').addEventListener('click', () => {
   });
 });
 
-document.getElementById('btn-register').addEventListener('click', () => {
+document.getElementById('btn-register').addEventListener('click', async () => {
   clearAuthError('reg-error');
   const u  = document.getElementById('reg-username').value;
   const p  = document.getElementById('reg-pin').value;
   const p2 = document.getElementById('reg-pin2').value;
   if (p !== p2) { showAuthError('reg-error', 'PINs do not match.'); return; }
-  const result = window.FeltoraAuth.register(u, p);
-  if (!result.ok) { showAuthError('reg-error', result.error); return; }
-  try { localStorage.setItem('feltora-last-user', u.trim().toLowerCase()); } catch {}
-  applyAccountToLobby(u.trim().toLowerCase());
-  if (window.FeltoraOnboarding) { window.FeltoraOnboarding.open(u.trim()); } else { showScreen('lobby'); }
+  const button = document.getElementById('btn-register');
+  const username = u.trim().toLowerCase();
+  const existing = window.FeltoraAuth.getAccount(username);
+  button.disabled = true;
+  try {
+    const result = await window.FeltoraAuth.register(u, p);
+    if (!result.ok) { showAuthError('reg-error', result.error); return; }
+    try { localStorage.setItem('feltora-last-user', username); } catch {}
+    applyAccountToLobby(username);
+    if (!existing && window.FeltoraOnboarding) window.FeltoraOnboarding.open(u.trim());
+    else showScreen('lobby');
+  } catch (error) {
+    showAuthError('reg-error', error.message || 'Account creation failed. Try again.');
+  } finally {
+    button.disabled = false;
+  }
 });
 
 // Enter key on register fields
@@ -2493,9 +2512,9 @@ document.getElementById('reg-username').addEventListener('input', () => {
   const val = document.getElementById('reg-username').value.trim().toLowerCase();
   const errEl = document.getElementById('reg-error');
   if (!val || val.length < 3 || !/^[a-z0-9_]+$/.test(val)) { errEl.hidden = true; return; }
-  const taken = window.FeltoraAuth.getAccount(val) !== null;
-  if (taken) {
-    errEl.textContent = `"${val}" is already taken.`;
+  const existing = window.FeltoraAuth.getAccount(val);
+  if (existing) {
+    errEl.textContent = 'Saved on this device. Use its existing PIN to keep this profile when enabling online access.';
     errEl.hidden = false;
   } else {
     errEl.hidden = true;

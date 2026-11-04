@@ -77,7 +77,7 @@
             <div class="auth-field">
               <label class="mini-label" for="reg-pin">4-digit PIN</label>
               <input id="reg-pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="new-password">
-              <small>Used to sign back in on this device</small>
+              <small>Use your username and PIN to sign in on any device</small>
             </div>
             <div class="auth-field">
               <label class="mini-label" for="reg-pin2">Confirm PIN</label>
@@ -598,6 +598,7 @@
             <button class="action-btn primary" id="community-new-post" type="button">+ Post</button>
           </div>
         </header>
+        <p id="community-status" class="community-status" role="status" aria-live="polite" hidden></p>
 
         <!-- Phone mockup view -->
         <div id="community-phone-view" hidden>
@@ -939,7 +940,7 @@
         </div>
 
         <!-- Call overlay -->
-        <div id="call-overlay" hidden style="position:fixed;inset:0;z-index:10400;background:linear-gradient(160deg,#0d1f33,#050a08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+        <div id="call-overlay" class="call-overlay" hidden>
           <div style="font-size:3rem;">📞</div>
           <div id="call-name" style="font:800 1.3rem/1 system-ui,sans-serif;color:#fff;"></div>
           <div id="call-status" style="font:400 0.85rem/1 system-ui,sans-serif;color:rgba(255,255,255,0.5);">Calling…</div>
@@ -987,7 +988,7 @@
         </div>
 
         <div class="community-feed" id="community-feed" aria-live="polite">
-          <div class="feed-empty" id="feed-empty">No posts yet — be the first to post!</div>
+          <div class="feed-empty" id="feed-empty">No posts yet. Sign in to start the conversation.</div>
         </div>
       </div>
     </section>

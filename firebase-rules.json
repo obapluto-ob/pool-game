@@ -37,6 +37,49 @@
         ".read": true,
         ".write": true
       }
+    },
+    "community": {
+      ".read": true,
+      "posts": {
+        "$postId": {
+          ".write": "auth != null && ((!data.exists() && newData.child('authorUid').val() === auth.uid) || data.child('authorUid').val() === auth.uid)",
+          ".validate": "newData.hasChildren(['authorUid', 'author', 'body', 'type', 'ts']) && newData.child('authorUid').val() === auth.uid && newData.child('author').val() === root.child('profiles').child(auth.uid).child('username').val() && newData.child('body').isString() && newData.child('body').val().length <= 280 && newData.child('type').val().matches(/^(win|bug|idea|chat)$/) && newData.child('ts').isNumber() && (newData.child('image').val() == null || (newData.child('image').isString() && newData.child('image').val().length <= 150000))"
+        }
+      },
+      "likes": {
+        "$postId": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      },
+      "follows": {
+        "$uid": {
+          "$followedUid": {
+            ".write": "auth != null && auth.uid === $uid && auth.uid !== $followedUid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    },
+    "authUsernames": {
+      ".read": false,
+      ".write": false
+    },
+    "authCredentials": {
+      ".read": false,
+      ".write": false
+    },
+    "authRateLimits": {
+      ".read": false,
+      ".write": false
+    },
+    "profiles": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid && newData.child('username').val() === data.child('username').val() && newData.child('stats/wins').val() === data.child('stats/wins').val() && newData.child('stats/losses').val() === data.child('stats/losses').val() && newData.child('stats/frames').val() === data.child('stats/frames').val()"
+      }
     }
   }
 }

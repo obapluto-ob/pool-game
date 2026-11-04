@@ -6,40 +6,61 @@
   var FB_BASE = 'https://feltora-spots-default-rtdb.firebaseio.com';
   var FB_API_KEY = 'AIzaSyCck0pFu7FuXku8EOUvzX7hRRzpURMebjE';
 
-  // Append ?auth=apiKey to all requests — works with public rules
-  function fbUrl(path) {
-    return FB_BASE + path + '.json?auth=' + FB_API_KEY;
+  function fbUrl(path, token) {
+    var url = FB_BASE + path + '.json?key=' + encodeURIComponent(FB_API_KEY);
+    if (token) url += '&auth=' + encodeURIComponent(token);
+    return url;
   }
 
-  // ── Generic REST helpers ─────────────────────────────────────────
+  async function fbRequest(path, options) {
+    var token = window.FeltoraAuth && window.FeltoraAuth.getIdToken
+      ? await window.FeltoraAuth.getIdToken()
+      : null;
+    var response = await fetch(fbUrl(path, token), options);
+    var result = response.status === 204 ? null : await response.json();
+    if (!response.ok) {
+      var detail = result && result.error ? ': ' + result.error : '';
+      throw new Error('Firebase request failed (' + response.status + ')' + detail);
+    }
+    return result;
+  }
+
   function fbGet(path) {
-    return fetch(fbUrl(path), { cache: 'no-store' }).then(function(r) { return r.json(); });
+    return fbRequest(path, { cache: 'no-store' });
   }
 
   function fbSet(path, data) {
-    return fetch(fbUrl(path), {
+    return fbRequest(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    }).then(function(r) { return r.json(); });
+    });
   }
 
   function fbPush(path, data) {
-    return fetch(fbUrl(path), {
+    return fbRequest(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    }).then(function(r) { return r.json(); });
+    });
+  }
+
+  function fbUpdate(path, data) {
+    return fbRequest(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
   }
 
   function fbDelete(path) {
-    return fetch(fbUrl(path), { method: 'DELETE' });
+    return fbRequest(path, { method: 'DELETE' });
   }
 
   // ── SSE listener (real-time updates) ────────────────────────────
   // Returns an EventSource — call .close() to stop listening
   function fbListen(path, onData) {
-    var url = FB_BASE + path + '.json?auth=' + FB_API_KEY;
+    var url = fbUrl(path);
     var es = new EventSource(url);
     es.addEventListener('put', function(e) {
       try {
@@ -155,6 +176,7 @@
 
   // ── Export ───────────────────────────────────────────────────────
   window.FeltoraFirebase = {
+    apiKey: FB_API_KEY,
     // DMs
     sendDM:       fbSendDM,
     getDMs:       fbGetDMs,
@@ -175,6 +197,7 @@
     // Raw helpers (for online.js to use too)
     get:    fbGet,
     set:    fbSet,
+    update: fbUpdate,
     push:   fbPush,
     delete: fbDelete,
     listen: fbListen

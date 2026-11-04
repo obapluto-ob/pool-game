@@ -776,9 +776,12 @@
   var selectedTipAmt = 0;
 
   var tipInitDone = false;
+  var tipViewTemplate = null;
   function initTipView() {
     if (tipInitDone) return;
     tipInitDone = true;
+    var tipView = document.getElementById('phone-tip-view-inner');
+    if (tipView && tipViewTemplate === null) tipViewTemplate = tipView.innerHTML;
 
     // Remove old listeners by cloning nodes
     document.querySelectorAll('.phone-tip-amt').forEach(function(btn) {
@@ -888,9 +891,19 @@
             + '<h3 class="tip-ty-title">Thank you!</h3>'
             + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
             + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + amount.toLocaleString() + ' ' + cfg.currency + '</div>'
-            + '<div class="tip-ty-ref">Ref: ' + response.reference + '</div>'
-            + '<button class="tip-ty-back ob-btn-primary" onclick="this.closest('#phone-tip-view-inner') && location.reload()">Back to FELTORA</button>'
+            + '<div class="tip-ty-ref"></div>'
+            + '<button class="tip-ty-back ob-btn-primary" type="button">Back to FELTORA</button>'
             + '</div>';
+          var refEl = tipView.querySelector('.tip-ty-ref');
+          if (refEl) refEl.textContent = 'Ref: ' + response.reference;
+          var backBtn = tipView.querySelector('.tip-ty-back');
+          if (backBtn) backBtn.addEventListener('click', function() {
+            if (tipViewTemplate !== null) tipView.innerHTML = tipViewTemplate;
+            selectedTipAmt = 0;
+            tipInitDone = false;
+            initTipView();
+            phoneShowView('home');
+          });
         }
         showToast(thanks.emoji + ' ' + thanks.msg.slice(0, 60) + '...');
       },
@@ -934,11 +947,29 @@
     if (psUser) psUser.textContent = me || 'Guest';
   }
 
-  function phoneRenderFeed() {
+  function phoneEscapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  async function phoneRenderFeed() {
     var feed = document.getElementById('phone-feed');
     if (!feed) return;
     var posts = [];
-    try { posts = JSON.parse(localStorage.getItem('feltora-community-posts') || '[]'); } catch(e) {}
+    try {
+      if (window.FeltoraCommunity) {
+        await window.FeltoraCommunity.refresh();
+        posts = window.FeltoraCommunity.getPosts();
+      }
+    } catch (error) {
+      console.error('Phone community feed failed to load:', error);
+      feed.innerHTML = '<p class="phone-feed-empty">Community feed is unavailable right now.</p>';
+      return;
+    }
     if (!posts.length) {
       feed.innerHTML = '<p class="phone-feed-empty">No posts yet. Be the first!</p>';
       return;
@@ -947,10 +978,10 @@
       var badge = (p.author && p.author !== 'Guest') ? ' <span style="color:#00f0a8;font-size:0.6rem;">&#x2714;</span>' : '';
       return '<div class="phone-feed-card">'
         + '<div class="phone-feed-top">'
-        + '<div class="phone-feed-avatar">' + (p.author || 'G').slice(0,1).toUpperCase() + '</div>'
-        + '<span class="phone-feed-author">' + (p.author || 'Guest') + badge + '</span>'
+        + '<div class="phone-feed-avatar">' + phoneEscapeHtml((p.author || 'G').slice(0,1).toUpperCase()) + '</div>'
+        + '<span class="phone-feed-author">' + phoneEscapeHtml(p.author || 'Player') + badge + '</span>'
         + '</div>'
-        + '<p class="phone-feed-body">' + String(p.body || '').slice(0, 90) + '</p>'
+        + '<p class="phone-feed-body">' + phoneEscapeHtml(String(p.body || '').slice(0, 90)) + '</p>'
         + '</div>';
     }).join('');
   }

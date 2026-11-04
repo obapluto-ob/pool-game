@@ -356,13 +356,20 @@ const Auth = (() => {
           await auth.signInWithRedirect(provider);
           return { ok: true, redirecting: true };
         }
-        const result = await auth.signInWithPopup(provider);
+        let result;
+        try {
+          result = await auth.signInWithPopup(provider);
+        } catch (error) {
+          if (!error || error.code !== 'auth/popup-blocked') throw error;
+          await auth.signInWithRedirect(provider);
+          return { ok: true, redirecting: true };
+        }
         return await resolveGoogleUser(result.user);
       } catch (error) {
         const messages = {
           'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
           'auth/unauthorized-domain': 'This site is not authorized for Google sign-in. Add its hostname to Firebase Authentication authorized domains.',
-          'auth/popup-blocked': 'The browser blocked the Google sign-in popup. Allow popups and try again.',
+          'auth/popup-blocked': 'The browser blocked Google sign-in. Allow popups or try again in a browser that permits sign-in redirects.',
           'auth/network-request-failed': 'Google sign-in could not reach Firebase. Check your connection and try again.'
         };
         const code = error && typeof error === 'object' ? error.code : '';

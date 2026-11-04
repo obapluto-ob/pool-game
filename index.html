@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261106-ob6">
+  <link rel="stylesheet" href="css/styles.css?v=20261106-v4">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -845,23 +845,73 @@
                   </div>
                 </div>
 
+                <!-- FeltoraChat new group modal -->
+                <div id="fchat-new-group-modal" class="fchat-modal" hidden>
+                  <div class="fchat-modal-box">
+                    <h4 class="fchat-modal-title">New Group</h4>
+                    <input id="fchat-group-name-input" class="fchat-modal-input" type="text" placeholder="Group name..." maxlength="30">
+                    <div class="fchat-modal-emoji-row" id="fchat-emoji-row">
+                      <button class="fchat-emoji-btn active" data-emoji="&#x1F3B1;">&#x1F3B1;</button>
+                      <button class="fchat-emoji-btn" data-emoji="&#x1F3C6;">&#x1F3C6;</button>
+                      <button class="fchat-emoji-btn" data-emoji="&#x1F525;">&#x1F525;</button>
+                      <button class="fchat-emoji-btn" data-emoji="&#x1F4AC;">&#x1F4AC;</button>
+                      <button class="fchat-emoji-btn" data-emoji="&#x1F47B;">&#x1F47B;</button>
+                      <button class="fchat-emoji-btn" data-emoji="&#x26A1;">&#x26A1;</button>
+                    </div>
+                    <div class="fchat-modal-actions">
+                      <button id="fchat-modal-cancel" class="fchat-modal-btn cancel">Cancel</button>
+                      <button id="fchat-modal-create" class="fchat-modal-btn create">Create</button>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Tip Dev (Paystack) -->
                 <div class="phone-view" id="phone-tip">
-                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Tip the Dev</span><span></span></div>
-                  <div class="phone-tip-view">
-                    <div class="phone-tip-art">&#x1F3B1;</div>
-                    <h3 class="phone-tip-title">Enjoying FELTORA?</h3>
-                    <p class="phone-tip-sub">Send a tip to support development. Every shilling counts!</p>
-                    <div class="phone-tip-amounts">
-                      <button class="phone-tip-amt" data-amount="100">KES 100</button>
-                      <button class="phone-tip-amt" data-amount="250">KES 250</button>
-                      <button class="phone-tip-amt" data-amount="500">KES 500</button>
-                      <button class="phone-tip-amt" data-amount="1000">KES 1,000</button>
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Support FELTORA</span><span></span></div>
+                  <div class="phone-tip-view" id="phone-tip-view-inner">
+                    <div class="phone-tip-hero">
+                      <div class="phone-tip-ball">&#x1F3B1;</div>
+                      <h3 class="phone-tip-title">Love FELTORA?</h3>
+                      <p class="phone-tip-sub">Built by one developer. A tip keeps the lights on and new features coming.</p>
                     </div>
-                    <input id="tip-custom-amount" type="number" placeholder="Custom amount (KES)" min="10" max="50000" class="phone-tip-custom-input">
-                    <input id="tip-email" type="email" placeholder="Your email (for receipt)" class="phone-tip-email">
-                    <button id="phone-tip-pay" class="ob-btn-primary" style="margin-top:8px;">Pay with Paystack &#x1F4B3;</button>
-                    <p class="phone-tip-note">Secure payment via Paystack. No account needed.</p>
+                    <div class="phone-tip-amounts">
+                      <button class="phone-tip-amt" data-amount="50">
+                        <span class="tip-amt-emoji">&#x2615;</span>
+                        <span class="tip-amt-val">KES 50</span>
+                        <span class="tip-amt-label">Coffee</span>
+                      </button>
+                      <button class="phone-tip-amt" data-amount="200">
+                        <span class="tip-amt-emoji">&#x1F355;</span>
+                        <span class="tip-amt-val">KES 200</span>
+                        <span class="tip-amt-label">Pizza slice</span>
+                      </button>
+                      <button class="phone-tip-amt" data-amount="500">
+                        <span class="tip-amt-emoji">&#x1F37B;</span>
+                        <span class="tip-amt-val">KES 500</span>
+                        <span class="tip-amt-label">Round of drinks</span>
+                      </button>
+                      <button class="phone-tip-amt" data-amount="1000">
+                        <span class="tip-amt-emoji">&#x1F451;</span>
+                        <span class="tip-amt-val">KES 1,000</span>
+                        <span class="tip-amt-label">Legend tier</span>
+                      </button>
+                    </div>
+                    <div class="phone-tip-custom-row">
+                      <span class="phone-tip-custom-label">Custom</span>
+                      <input id="tip-custom-amount" type="number" placeholder="Enter amount" min="10" max="100000" class="phone-tip-custom-input">
+                    </div>
+                    <div class="phone-tip-selected">
+                      Sending: <strong id="tip-amount-display">—</strong>
+                    </div>
+                    <input id="tip-email" type="email" placeholder="&#x1F4E7; Your email (for receipt)" class="phone-tip-email">
+                    <button id="phone-tip-pay" class="phone-tip-pay-btn">
+                      <span>Pay Securely</span>
+                      <span class="tip-pay-methods">M-Pesa &middot; Card &middot; Apple Pay</span>
+                    </button>
+                    <div class="phone-tip-badges">
+                      <span class="tip-badge">&#x1F512; Paystack secured</span>
+                      <span class="tip-badge">&#x2705; No account needed</span>
+                    </div>
                   </div>
                 </div>
 
@@ -992,13 +1042,13 @@
 
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261106-ob6" defer></script>
+  <script src="src/auth.js?v=20261106-v4" defer></script>
   <script src="src/mascots.js?v=20261105-v3" defer></script>
   <script src="src/online.js?v=20261105-v3" defer></script>
-  <script src="src/game.js?v=20261106-ob6" defer></script>
-  <script src="src/community.js?v=20261106-ob6" defer></script>
-  <script src="src/onboarding.js?v=20261106-ob6" defer></script>
-  <script src="src/phone.js?v=20261106-ob6" defer></script>
+  <script src="src/game.js?v=20261106-v4" defer></script>
+  <script src="src/community.js?v=20261106-v4" defer></script>
+  <script src="src/onboarding.js?v=20261106-v4" defer></script>
+  <script src="src/phone.js?v=20261106-v4" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {
@@ -1024,7 +1074,58 @@
 
     // ── Service worker + PWA install prompt ──────────────────────
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        // When a new SW is waiting (new deploy detected)
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner(newWorker);
+            }
+          });
+        });
+        // Check for updates every 5 minutes while page is open
+        setInterval(function() { reg.update(); }, 5 * 60 * 1000);
+      }).catch(function() {});
+
+      // If SW controller changes (after skipWaiting), reload
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        if (!refreshing) { refreshing = true; window.location.reload(); }
+      });
+    }
+
+    function showUpdateBanner(newWorker) {
+      var existing = document.getElementById('update-banner');
+      if (existing) return;
+      var banner = document.createElement('div');
+      banner.id = 'update-banner';
+      banner.style.cssText = [
+        'position:fixed','top:0','left:0','right:0','z-index:99999',
+        'background:linear-gradient(135deg,#1a2e24,#0f1c16)',
+        'border-bottom:1px solid rgba(0,240,168,0.4)',
+        'padding:10px 16px','display:flex','align-items:center',
+        'justify-content:space-between','gap:12px',
+        'backdrop-filter:blur(10px)',
+        'box-shadow:0 4px 20px rgba(0,0,0,0.5)'
+      ].join(';');
+      banner.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">'
+        + '<span style="font-size:1.1rem;">&#x1F504;</span>'
+        + '<div><div style="font:700 0.82rem/1.2 system-ui,sans-serif;color:#e6f2eb;">New version available</div>'
+        + '<div style="font:400 0.68rem/1.3 system-ui,sans-serif;color:#6e9880;">FELTORA was updated. Reload when ready.</div></div>'
+        + '</div>'
+        + '<div style="display:flex;gap:8px;flex-shrink:0;">'
+        + '<button id="update-now-btn" style="padding:8px 14px;border-radius:10px;border:none;background:linear-gradient(135deg,#00f0a8,#00c88a);color:#050a08;font:700 0.78rem/1 system-ui,sans-serif;cursor:pointer;">Update now</button>'
+        + '<button id="update-later-btn" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#6e9880;font:700 0.78rem/1 system-ui,sans-serif;cursor:pointer;">Later</button>'
+        + '</div>';
+      document.body.prepend(banner);
+      document.getElementById('update-now-btn').addEventListener('click', function() {
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+      });
+      document.getElementById('update-later-btn').addEventListener('click', function() {
+        banner.remove();
+      });
     }
 
     let _installPrompt = null;

@@ -7,7 +7,7 @@
   var radioPlaying = false;
   var radioAudio = null;
   var currentStation = null;
-  var PAYSTACK_KEY = 'pk_live_YOUR_KEY_HERE'; // replace with real key
+  var PAYSTACK_KEY = 'pk_live_843fc3c7f2b2b12acf9de27e102dcb8ab3229136';
 
   var KENYA_STATIONS = [
     { name: 'Capital FM',    url: 'https://stream.zeno.fm/0r0xa792kwzuv', emoji: '🎵' },
@@ -254,26 +254,25 @@
       { role: 'system', content: 'You are Orion, a friendly AI assistant built into FELTORA, a browser-based 8-ball pool game. Be helpful, concise, and fun. Keep responses short (under 120 words).' }
     ].concat(orionHistory.slice(-8));
 
-    fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer OPENAI_KEY_PLACEHOLDER' },
-      body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: messages, max_tokens: 150 })
-    }).then(function(r) { return r.json(); })
-    .then(function(d) {
+    // pollinations.ai — free, no API key needed
+    var prompt = messages.map(function(m) { return m.role + ': ' + m.content; }).join('\n');
+    var apiUrl = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=openai&seed=' + Math.floor(Math.random()*9999);
+    fetch(apiUrl)
+    .then(function(r) { return r.text(); })
+    .then(function(reply) {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
-      var reply = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
-      if (!reply) throw new Error('no reply');
+      reply = reply.trim().slice(0, 300);
+      if (!reply) throw new Error('empty');
       orionHistory.push({ role: 'assistant', content: reply });
       orionAddMessage('assistant', reply);
     }).catch(function() {
       if (typing.parentNode) typing.parentNode.removeChild(typing);
-      // fallback: use free wttr/joke API or static pool tips
       var tips = [
-        "Always aim for the center of the pocket — not the ball edge.",
-        "Control your power. A soft shot with good angle beats a hard miss.",
-        "Watch the cue ball after contact — that's your next shot setup.",
-        "When in doubt, play safe. Leave your opponent with nothing.",
-        "The ghost ball method: imagine a ball touching your target, aim for its center."
+        'Always aim for the centre of the pocket, not the ball edge.',
+        'Control your power. A soft shot with good angle beats a hard miss.',
+        'Watch the cue ball after contact — that is your next shot setup.',
+        'When in doubt, play safe. Leave your opponent with nothing.',
+        'Ghost ball method: imagine a ball touching your target, aim for its centre.'
       ];
       var reply = tips[Math.floor(Math.random() * tips.length)];
       orionHistory.push({ role: 'assistant', content: reply });
@@ -388,40 +387,80 @@
 
 
   // ── Paystack tip ─────────────────────────────────────────────────
-  var PAYSTACK_KEY = 'pk_live_YOUR_KEY_HERE';
   var selectedTipAmt = 0;
 
+  var tipInitDone = false;
   function initTipView() {
+    if (tipInitDone) return;
+    tipInitDone = true;
     document.querySelectorAll('.phone-tip-amt').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.phone-tip-amt').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         selectedTipAmt = parseInt(btn.dataset.amount, 10);
         var custom = document.getElementById('tip-custom-amount');
-        if (custom) custom.value = '';
+        if (custom) { custom.value = ''; custom.placeholder = 'or enter custom amount'; }
+        updateTipDisplay(selectedTipAmt);
       });
+    });
+    var custom = document.getElementById('tip-custom-amount');
+    if (custom) custom.addEventListener('input', function() {
+      var v = parseInt(custom.value, 10);
+      if (v > 0) {
+        document.querySelectorAll('.phone-tip-amt').forEach(function(b) { b.classList.remove('active'); });
+        selectedTipAmt = v;
+        updateTipDisplay(v);
+      }
     });
     var payBtn = document.getElementById('phone-tip-pay');
     if (!payBtn) return;
     payBtn.addEventListener('click', function() {
-      var custom = document.getElementById('tip-custom-amount');
       var emailEl = document.getElementById('tip-email');
-      var amount = (custom && custom.value) ? parseInt(custom.value, 10) : selectedTipAmt;
+      var amount = selectedTipAmt;
       var email = emailEl ? emailEl.value.trim() : '';
-      if (!amount || amount < 10) { showToast('Please select or enter an amount.'); return; }
-      if (!email || email.indexOf('@') === -1) { showToast('Please enter a valid email.'); return; }
-      if (typeof PaystackPop === 'undefined') { showToast('Payment unavailable. Check your connection.'); return; }
-      var handler = PaystackPop.setup({
-        key: PAYSTACK_KEY,
-        email: email,
-        amount: amount * 100,
-        currency: 'KES',
-        ref: 'FELTORA-TIP-' + Date.now(),
-        callback: function(response) { showToast('Thank you for the tip! Ref: ' + response.reference); },
-        onClose: function() {}
-      });
-      handler.openIframe();
+      if (!amount || amount < 10) { showToast('Pick an amount first.'); return; }
+      if (!email || email.indexOf('@') === -1) { showToast('Enter your email for the receipt.'); return; }
+      if (typeof PaystackPop === 'undefined') {
+        showToast('Loading payment... try again in a moment.');
+        var s = document.createElement('script');
+        s.src = 'https://js.paystack.co/v1/inline.js';
+        s.onload = function() { triggerPaystack(amount, email); };
+        document.head.appendChild(s);
+        return;
+      }
+      triggerPaystack(amount, email);
     });
+  }
+
+  function updateTipDisplay(amount) {
+    var display = document.getElementById('tip-amount-display');
+    if (display) display.textContent = 'KES ' + amount.toLocaleString();
+  }
+
+  function triggerPaystack(amount, email) {
+    var handler = PaystackPop.setup({
+      key: PAYSTACK_KEY,
+      email: email,
+      amount: amount * 100,
+      currency: 'KES',
+      ref: 'FELTORA-TIP-' + Date.now(),
+      metadata: {
+        custom_fields: [{ display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }]
+      },
+      callback: function(response) {
+        showToast('Thank you so much! Your tip means everything. Ref: ' + response.reference);
+        var tipView = document.getElementById('phone-tip-view-inner');
+        if (tipView) {
+          tipView.innerHTML = '<div style="text-align:center;padding:32px 16px;">'
+            + '<div style="font-size:3rem;margin-bottom:12px;">&#x1F917;</div>'
+            + '<h3 style="color:var(--accent);font:800 1rem/1 system-ui,sans-serif;margin:0 0 8px;">Thank you!</h3>'
+            + '<p style="color:var(--muted);font:400 0.72rem/1.5 system-ui,sans-serif;margin:0;">Your tip of KES ' + amount.toLocaleString() + ' was received. You are a legend.</p>'
+            + '</div>';
+        }
+      },
+      onClose: function() {}
+    });
+    handler.openIframe();
   }
 
   // ── Profile & Feed ───────────────────────────────────────────────
@@ -553,18 +592,39 @@
     }
   }
 
-  // -- FeltoraChat new group
+  // -- FeltoraChat new group (inline modal, no prompt())
   function initFChatNewGroup() {
     var btn = document.getElementById('fchat-new-group');
-    if (!btn) return;
+    var modal = document.getElementById('fchat-new-group-modal');
+    var cancelBtn = document.getElementById('fchat-modal-cancel');
+    var createBtn = document.getElementById('fchat-modal-create');
+    var nameInput = document.getElementById('fchat-group-name-input');
+    var emojiRow = document.getElementById('fchat-emoji-row');
+    if (!btn || !modal) return;
+    var selectedEmoji = '&#x1F3B1;';
+
     btn.addEventListener('click', function() {
-      var name = prompt('Group name:');
-      if (!name || !name.trim()) return;
+      modal.hidden = false;
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+    });
+    if (cancelBtn) cancelBtn.addEventListener('click', function() { modal.hidden = true; });
+    if (emojiRow) emojiRow.addEventListener('click', function(e) {
+      var eb = e.target.closest('.fchat-emoji-btn');
+      if (!eb) return;
+      emojiRow.querySelectorAll('.fchat-emoji-btn').forEach(function(b) { b.classList.remove('active'); });
+      eb.classList.add('active');
+      selectedEmoji = eb.dataset.emoji;
+    });
+    if (createBtn) createBtn.addEventListener('click', function() {
+      var name = nameInput ? nameInput.value.trim() : '';
+      if (!name) { if (nameInput) nameInput.focus(); return; }
       var rooms = getFChatRooms();
-      rooms.push({ id: 'grp-' + Date.now(), name: name.trim(), desc: 'Created by you' });
+      rooms.push({ id: 'grp-' + Date.now(), name: selectedEmoji + ' ' + name, desc: 'Created by ' + ((window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'you') });
       saveFChatRooms(rooms);
       renderFChatRooms();
+      modal.hidden = true;
     });
+    if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) modal.hidden = true; });
   }
 
   // -- Settings toggles

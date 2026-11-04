@@ -4510,3 +4510,197 @@ h1 {
   .ob-avatar-grid { grid-template-columns: repeat(4,1fr); gap: 6px; }
   .ob-cue-grid { grid-template-columns: repeat(3,1fr); }
 }
+
+/* ================================================================
+   TIP DEV — redesigned
+   ================================================================ */
+.phone-tip-view {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px 20px;
+  background: #050a08;
+}
+.phone-tip-hero { text-align: center; padding: 8px 0 4px; }
+.phone-tip-ball { font-size: 2.6rem; line-height: 1; margin-bottom: 8px; }
+.phone-tip-title { font: 800 1rem/1 system-ui,sans-serif; color: var(--text); margin: 0 0 6px; }
+.phone-tip-sub { font: 400 0.7rem/1.5 system-ui,sans-serif; color: var(--muted); margin: 0; }
+
+.phone-tip-amounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.phone-tip-amt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 6px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.phone-tip-amt:hover { transform: translateY(-2px); border-color: rgba(0,240,168,0.3); }
+.phone-tip-amt.active {
+  border-color: var(--accent);
+  background: rgba(0,240,168,0.1);
+  box-shadow: 0 0 0 1px rgba(0,240,168,0.15), 0 4px 16px rgba(0,240,168,0.1);
+}
+.tip-amt-emoji { font-size: 1.4rem; line-height: 1; }
+.tip-amt-val { font: 800 0.78rem/1 system-ui,sans-serif; color: var(--text); }
+.tip-amt-label { font: 400 0.58rem/1 system-ui,sans-serif; color: var(--muted); }
+.phone-tip-amt.active .tip-amt-val { color: var(--accent); }
+
+.phone-tip-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 4px 12px;
+}
+.phone-tip-custom-label { font: 600 0.65rem/1 system-ui,sans-serif; color: var(--muted); white-space: nowrap; }
+.phone-tip-custom-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: 600 0.78rem/1 system-ui,sans-serif;
+  outline: none;
+  padding: 8px 0;
+  min-width: 0;
+}
+.phone-tip-custom-input::placeholder { color: rgba(255,255,255,0.2); }
+
+.phone-tip-selected {
+  text-align: center;
+  font: 400 0.68rem/1 system-ui,sans-serif;
+  color: var(--muted);
+  min-height: 18px;
+}
+.phone-tip-selected strong { color: var(--accent); font-size: 0.82rem; }
+
+.phone-tip-email {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  font: 400 0.72rem/1 system-ui,sans-serif;
+  outline: none;
+  box-sizing: border-box;
+}
+.phone-tip-email:focus { border-color: rgba(0,240,168,0.4); }
+
+.phone-tip-pay-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #00f0a8, #00c88a);
+  color: #050a08;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(0,240,168,0.3);
+}
+.phone-tip-pay-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,240,168,0.4); }
+.phone-tip-pay-btn span:first-child { font: 800 0.9rem/1 system-ui,sans-serif; }
+.tip-pay-methods { font: 500 0.6rem/1 system-ui,sans-serif; opacity: 0.7; }
+
+.phone-tip-badges {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.tip-badge {
+  font: 500 0.6rem/1 system-ui,sans-serif;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ================================================================
+   FELTORACHAT GROUP CREATION MODAL
+   ================================================================ */
+.fchat-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+}
+.fchat-modal[hidden] { display: none; }
+.fchat-modal-box {
+  width: 100%;
+  background: linear-gradient(160deg, #1a2e24, #0f1c16);
+  border-top: 1px solid rgba(0,240,168,0.25);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fchat-modal-up 0.25s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes fchat-modal-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.fchat-modal-title { font: 800 0.9rem/1 system-ui,sans-serif; color: var(--text); margin: 0; text-align: center; }
+.fchat-modal-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--text);
+  font: 500 0.8rem/1 system-ui,sans-serif;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.fchat-modal-input:focus { border-color: rgba(0,240,168,0.4); }
+.fchat-modal-emoji-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.fchat-emoji-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fchat-emoji-btn.active { border-color: var(--accent); background: rgba(0,240,168,0.1); transform: scale(1.15); }
+.fchat-modal-actions { display: flex; gap: 8px; }
+.fchat-modal-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 12px;
+  font: 700 0.8rem/1 system-ui,sans-serif;
+  cursor: pointer;
+  border: none;
+}
+.fchat-modal-btn.cancel { background: rgba(255,255,255,0.07); color: var(--muted); }
+.fchat-modal-btn.create { background: linear-gradient(135deg,#00f0a8,#00c88a); color: #050a08; }

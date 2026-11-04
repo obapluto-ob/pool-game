@@ -16,13 +16,51 @@ function httpError(status, message) {
 
 function getServices() {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not configured.');
+  if (!serviceAccountJson) {
+    throw httpError(503, 'Google account setup is not configured on the server. Set FIREBASE_SERVICE_ACCOUNT_JSON in Vercel.');
+  }
+
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } catch {
+    throw httpError(503, 'Google account setup has invalid server credentials. Check FIREBASE_SERVICE_ACCOUNT_JSON in Vercel.');
+  }
+  if (!serviceAccount || typeof serviceAccount !== 'object'
+      || typeof serviceAccount.project_id !== 'string'
+      || typeof serviceAccount.client_email !== 'string'
+      || typeof serviceAccount.private_key !== 'string') {
+    throw httpError(503, 'Google account setup has incomplete server credentials. Use the Firebase Admin service-account JSON in Vercel.');
+  }
+
+  const webConfigJson = process.env.FIREBASE_WEB_CONFIG;
+  if (webConfigJson) {
+    try {
+      const webConfig = JSON.parse(webConfigJson);
+      if (webConfig.projectId && webConfig.projectId !== serviceAccount.project_id) {
+        throw httpError(503, 'Firebase web and server configurations use different projects. Set both to the same Firebase project in Vercel.');
+      }
+      if (webConfig.databaseURL && webConfig.databaseURL.replace(/\/+$/, '') !== DATABASE_URL.replace(/\/+$/, '')) {
+        throw httpError(503, 'Firebase web and server configurations use different Realtime Databases. Set FIREBASE_DATABASE_URL to the databaseURL in FIREBASE_WEB_CONFIG.');
+      }
+    } catch (error) {
+      if (Number.isInteger(error.status)) throw error;
+      throw httpError(503, 'Firebase web configuration is invalid. Check FIREBASE_WEB_CONFIG in Vercel.');
+    }
+  }
 
   const existing = getApps().find((app) => app.name === 'feltora-auth');
-  const app = existing || initializeApp({
-    credential: cert(JSON.parse(serviceAccountJson)),
-    databaseURL: DATABASE_URL
-  }, 'feltora-auth');
+  let app = existing;
+  if (!app) {
+    try {
+      app = initializeApp({
+        credential: cert(serviceAccount),
+        databaseURL: DATABASE_URL
+      }, 'feltora-auth');
+    } catch {
+      throw httpError(503, 'Firebase Admin credentials could not be initialized. Check the service-account key and FIREBASE_DATABASE_URL in Vercel.');
+    }
+  }
 
   return { auth: getAuth(app), database: getDatabase(app) };
 }

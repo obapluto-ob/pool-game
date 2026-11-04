@@ -222,6 +222,8 @@
       o[me] = Date.now();
       localStorage.setItem(ONLINE_KEY, JSON.stringify(o));
     } catch(e) {}
+    // also write to Firebase so other devices can see
+    if (window.FeltoraFirebase) window.FeltoraFirebase.setOnline(me).catch(function() {});
   }
   function isOnline(username) {
     try {
@@ -306,6 +308,29 @@
     }).join('');
   }
 
+  var activeFChatListener = null;
+
+  function renderFChatMsgList(msgs, roomId) {
+    var el = document.getElementById('fchat-messages');
+    if (!el) return;
+    var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
+    var u = getUnread(); delete u['fchat-' + roomId]; lsSet(UNREAD_KEY, u);
+    el.innerHTML = msgs.length ? msgs.map(function(m) {
+      var mine = m.from === me;
+      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + m.from + '" data-text="' + encodeURIComponent(m.text || '') + '" title="Report">\u2691</button>' : '';
+      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="fchat-' + roomId + '" title="React">\uD83D\uDE42</button>';
+      var content = m.voice
+        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
+        : '<span class="fchat-msg-text">' + (m.text || '') + '</span>';
+      return '<div class="fchat-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
+        + (!mine ? '<span class="fchat-msg-from">' + m.from + '</span>' : '')
+        + content
+        + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
+        + reactBtn + reportBtn + '</div>';
+    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:20px;">No messages yet. Say hi! \uD83D\uDC4B</p>';
+    el.scrollTop = el.scrollHeight;
+  }
+
   function openFChatRoom(roomId, roomName) {
     var roomsEl = document.getElementById('fchat-rooms');
     var roomView = document.getElementById('fchat-room-view');
@@ -319,34 +344,26 @@
   }
 
   function renderFChatMessages(roomId) {
-    var el = document.getElementById('fchat-messages');
-    if (!el) return;
-    var msgs = getFChatMessages(roomId);
-    var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
-    var reactions = getReactions('fchat-' + roomId);
-    // clear unread for this room
-    var u = getUnread(); delete u['fchat-' + roomId]; lsSet(UNREAD_KEY, u);
-    el.innerHTML = msgs.length ? msgs.map(function(m) {
-      var mine = m.from === me;
-      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + m.from + '" data-text="' + encodeURIComponent(m.text || '') + '" title="Report">\u2691</button>' : '';
-      var msgReactions = reactions[String(m.ts)] || {};
-      var reactionCounts = {};
-      Object.values(msgReactions).forEach(function(e) { reactionCounts[e] = (reactionCounts[e]||0)+1; });
-      var reactionBar = Object.keys(reactionCounts).length
-        ? '<div class="msg-reactions">' + Object.keys(reactionCounts).map(function(e) {
-            return '<span class="msg-reaction">' + e + ' ' + reactionCounts[e] + '</span>';
-          }).join('') + '</div>' : '';
-      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="fchat-' + roomId + '" title="React">\uD83D\uDE42</button>';
-      var content = m.voice
-        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
-        : '<span class="fchat-msg-text">' + (m.text || '') + '</span>';
-      return '<div class="fchat-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
-        + (!mine ? '<span class="fchat-msg-from">' + m.from + '</span>' : '')
-        + content
-        + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
-        + reactionBar + reactBtn + reportBtn + '</div>';
-    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:20px;">No messages yet. Say hi! \uD83D\uDC4B</p>';
-    el.scrollTop = el.scrollHeight;
+    // close previous listener
+    if (activeFChatListener) { try { activeFChatListener.close(); } catch(e) {} activeFChatListener = null; }
+
+    if (window.FeltoraFirebase) {
+      // show cached msgs instantly
+      var cached = getFChatMessages(roomId);
+      if (cached.length) renderFChatMsgList(cached, roomId);
+      // subscribe real-time
+      activeFChatListener = window.FeltoraFirebase.listenFChat(roomId, function(msgs) {
+        renderFChatMsgList(msgs, roomId);
+        // cache locally (cap 200)
+        try {
+          var a = JSON.parse(localStorage.getItem(FCHAT_KEY + '-msgs') || '{}');
+          a[roomId] = msgs.slice(-200);
+          localStorage.setItem(FCHAT_KEY + '-msgs', JSON.stringify(a));
+        } catch(e) {}
+      });
+    } else {
+      renderFChatMsgList(getFChatMessages(roomId), roomId);
+    }
   }
 
 
@@ -434,6 +451,27 @@
   // typing indicator state per friend
   var typingTimers = {};
 
+  // active DM listener — close when leaving chat
+  var activeDMListener = null;
+
+  function renderChatMsgs(msgs, friendId) {
+    var chatMessages = document.getElementById('phone-chat-messages');
+    if (!chatMessages) return;
+    var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
+    chatMessages.innerHTML = msgs.length ? msgs.map(function(m) {
+      var mine = m.from === me;
+      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="dm-' + friendId + '" title="React">&#x1F642;</button>';
+      var content = m.voice
+        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
+        : '<span>' + (m.text || '') + '</span>';
+      return '<div class="phone-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
+        + content
+        + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
+        + reactBtn + '</div>';
+    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:16px;">Say hi! \uD83D\uDC4B</p>';
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
   function renderChat(friendId) {
     var chatView = document.getElementById('phone-chat-view');
     var chatName = document.getElementById('phone-chat-name');
@@ -441,32 +479,31 @@
     if (!chatView || !chatMessages) return;
     if (chatName) chatName.textContent = friendId;
     clearUnread(friendId);
-    var msgs = getMessages(friendId);
-    var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
-    var reactions = getReactions('dm-' + friendId);
-    chatMessages.innerHTML = msgs.length ? msgs.map(function(m) {
-      var mine = m.from === me;
-      var msgReactions = reactions[String(m.ts)] || {};
-      var reactionCounts = {};
-      Object.values(msgReactions).forEach(function(e) { reactionCounts[e] = (reactionCounts[e]||0)+1; });
-      var reactionBar = Object.keys(reactionCounts).length
-        ? '<div class="msg-reactions">' + Object.keys(reactionCounts).map(function(e) {
-            return '<span class="msg-reaction">' + e + ' ' + reactionCounts[e] + '</span>';
-          }).join('') + '</div>' : '';
-      var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="dm-' + friendId + '" title="React">&#x1F642;</button>';
-      var content = m.voice
-        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
-        : '<span>' + m.text + '</span>';
-      return '<div class="phone-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
-        + content
-        + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
-        + reactionBar + reactBtn + '</div>';
-    }).join('') : '<p style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.65rem;padding:16px;">Say hi! \uD83D\uDC4B</p>';
-    chatMessages.scrollTop = chatMessages.scrollHeight;
     chatView.dataset.friend = friendId;
     var contacts = document.getElementById('phone-contacts-list');
     if (contacts) contacts.style.display = 'none';
     chatView.style.display = 'flex';
+
+    // close previous listener
+    if (activeDMListener) { try { activeDMListener.close(); } catch(e) {} activeDMListener = null; }
+
+    if (window.FeltoraFirebase) {
+      // show localStorage msgs instantly while Firebase loads
+      var cached = getMessages(friendId);
+      if (cached.length) renderChatMsgs(cached, friendId);
+      // then subscribe to Firebase real-time
+      activeDMListener = window.FeltoraFirebase.listenDMs(friendId, function(msgs) {
+        renderChatMsgs(msgs, friendId);
+        // also cache locally
+        try {
+          var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+          a[friendId] = msgs.slice(-MSG_CAP);
+          localStorage.setItem(MESSAGES_KEY, JSON.stringify(a));
+        } catch(e) {}
+      });
+    } else {
+      renderChatMsgs(getMessages(friendId), friendId);
+    }
   }
 
   // Show typing indicator in DM chat
@@ -918,6 +955,15 @@
           var base64 = reader.result;
           var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
           var msg = { from: me, voice: base64, text: '', ts: Date.now() };
+          var convId = (voiceTarget.type === 'dm' ? 'dm-' : 'fchat-') + voiceTarget.id;
+          if (window.FeltoraFirebase) {
+            window.FeltoraFirebase.saveVoiceNote(convId, base64, me).catch(function() {
+              // fallback to localStorage
+              if (voiceTarget.type === 'dm') saveMessage(voiceTarget.id, msg);
+              else saveFChatMessage(voiceTarget.id, msg);
+            });
+          }
+          // also save locally for instant playback
           if (voiceTarget.type === 'dm') {
             saveMessage(voiceTarget.id, msg);
             renderChat(voiceTarget.id);
@@ -1063,9 +1109,21 @@
         var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'You';
         var chatMessages = document.getElementById('phone-chat-messages');
         if (chatMessages) hideTypingIndicator(chatMessages);
-        saveMessage(chatView.dataset.friend, { from: me, text: txt, ts: Date.now() });
+        var msg = { from: me, text: txt, ts: Date.now() };
         input.value = '';
-        renderChat(chatView.dataset.friend);
+        if (window.FeltoraFirebase) {
+          window.FeltoraFirebase.sendDM(chatView.dataset.friend, msg).catch(function() {
+            // fallback to localStorage if Firebase fails
+            saveMessage(chatView.dataset.friend, msg);
+            renderChat(chatView.dataset.friend);
+          });
+          // optimistic local render
+          saveMessage(chatView.dataset.friend, msg);
+          renderChatMsgs(getMessages(chatView.dataset.friend), chatView.dataset.friend);
+        } else {
+          saveMessage(chatView.dataset.friend, msg);
+          renderChat(chatView.dataset.friend);
+        }
       }
       if (fchatRoomRow) openFChatRoom(fchatRoomRow.dataset.roomId, fchatRoomRow.dataset.roomName);
       if (fchatBack) {
@@ -1081,9 +1139,20 @@
         var txt2 = inp.value.trim();
         if (isAbusive(txt2)) { showToast('Keep it respectful please.'); return; }
         var me2 = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
-        saveFChatMessage(rv.dataset.room, { from: me2, text: txt2, ts: Date.now() });
+        var msg2 = { from: me2, text: txt2, ts: Date.now() };
         inp.value = '';
-        renderFChatMessages(rv.dataset.room);
+        if (window.FeltoraFirebase) {
+          window.FeltoraFirebase.sendFChat(rv.dataset.room, msg2).catch(function() {
+            saveFChatMessage(rv.dataset.room, msg2);
+            renderFChatMessages(rv.dataset.room);
+          });
+          // optimistic local render
+          saveFChatMessage(rv.dataset.room, msg2);
+          renderFChatMsgList(getFChatMessages(rv.dataset.room), rv.dataset.room);
+        } else {
+          saveFChatMessage(rv.dataset.room, msg2);
+          renderFChatMessages(rv.dataset.room);
+        }
       }
       if (fchatVoice) {
         var rv2 = document.getElementById('fchat-room-view');

@@ -1,0 +1,42 @@
+{
+  "rules": {
+    "spots": {
+      ".read": true,
+      ".write": true
+    },
+    "presence": {
+      ".read": true,
+      ".write": true
+    },
+    "messages": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "fchat": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "online": {
+      ".read": true,
+      "$username": {
+        ".write": true
+      }
+    },
+    "reactions": {
+      "$convId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "voicenotes": {
+      "$convId": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

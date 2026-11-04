@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261105-v3">
+  <link rel="stylesheet" href="css/styles.css?v=20261106-ob6">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -445,12 +445,14 @@
       <div id="onboarding-backdrop"></div>
       <div id="onboarding-card">
         <div id="ob-topbar">
-          <button id="ob-back" class="ob-back-btn" type="button" hidden>← Back</button>
+          <button id="ob-back" class="ob-back-btn" type="button" hidden>&#x2190; Back</button>
           <div id="onboarding-progress">
             <span class="ob-dot active" data-step="0"></span>
             <span class="ob-dot" data-step="1"></span>
             <span class="ob-dot" data-step="2"></span>
             <span class="ob-dot" data-step="3"></span>
+            <span class="ob-dot" data-step="4"></span>
+            <span class="ob-dot" data-step="5"></span>
           </div>
           <span style="width:52px"></span>
         </div>
@@ -459,40 +461,96 @@
         <div class="ob-step" id="ob-step-0">
           <div class="ob-welcome-avatar" id="ob-welcome-art"></div>
           <h2 class="ob-heading">Welcome, <span id="ob-welcome-name">Player</span>!</h2>
-          <p class="ob-sub">Set up your profile in 3 quick steps. You can always change this later.</p>
-          <button class="ob-btn-primary" id="ob-start">Let's go →</button>
+          <p class="ob-sub">Set up your FELTORA profile in 5 quick steps.</p>
+          <div class="ob-feature-pills">
+            <span class="ob-pill">&#x1F3AD; Avatar</span>
+            <span class="ob-pill">&#x1F3B1; Cue</span>
+            <span class="ob-pill">&#x1F7E9; Table</span>
+            <span class="ob-pill">&#x1F3C6; Title</span>
+            <span class="ob-pill">&#x26A1; Vibe</span>
+          </div>
+          <button class="ob-btn-primary" id="ob-start">Let&#x27;s go &#x2192;</button>
         </div>
 
         <!-- Step 1: Pick avatar -->
         <div class="ob-step" id="ob-step-1" hidden>
-          <p class="ob-step-label">Step 1 of 3 · Your Avatar</p>
-          <h2 class="ob-heading">Pick your character</h2>
-          <p class="ob-sub">This is how other players see you at the table.</p>
+          <p class="ob-step-label">Step 1 of 5 &#xB7; Your Character</p>
+          <h2 class="ob-heading">Who are you?</h2>
+          <p class="ob-sub">Pick your FELTORA character. Each one has a unique vibe.</p>
           <div class="ob-avatar-grid" id="ob-avatar-grid"></div>
-          <button class="ob-btn-primary" id="ob-avatar-next">Next — Choose cue →</button>
+          <div class="ob-selected-preview" id="ob-avatar-preview"></div>
+          <button class="ob-btn-primary" id="ob-avatar-next">Next &#x2192;</button>
         </div>
 
         <!-- Step 2: Pick cue -->
         <div class="ob-step" id="ob-step-2" hidden>
-          <p class="ob-step-label">Step 2 of 3 · Your Cue</p>
+          <p class="ob-step-label">Step 2 of 5 &#xB7; Your Cue</p>
           <h2 class="ob-heading">Choose your cue</h2>
-          <p class="ob-sub">Your signature stick at the table.</p>
+          <p class="ob-sub">Your signature stick. Purely cosmetic.</p>
           <div class="ob-cue-grid" id="ob-cue-grid"></div>
-          <button class="ob-btn-primary" id="ob-cue-next">Next — Pick table →</button>
+          <button class="ob-btn-primary" id="ob-cue-next">Next &#x2192;</button>
         </div>
 
-        <!-- Step 3: Pick table -->
+        <!-- Step 3: Pick table felt -->
         <div class="ob-step" id="ob-step-3" hidden>
-          <p class="ob-step-label">Step 3 of 3 · Your Table</p>
+          <p class="ob-step-label">Step 3 of 5 &#xB7; Your Table</p>
           <h2 class="ob-heading">Pick your home table</h2>
-          <p class="ob-sub">Your felt colour. Shows in every match you host.</p>
+          <p class="ob-sub">Your felt colour shows in every match you host.</p>
           <div class="ob-felt-grid" id="ob-felt-grid"></div>
-          <button class="ob-btn-primary" id="ob-finish">Done — Let's play! 🎱</button>
+          <button class="ob-btn-primary" id="ob-felt-next">Next &#x2192;</button>
+        </div>
+
+        <!-- Step 4: Pick title -->
+        <div class="ob-step" id="ob-step-4" hidden>
+          <p class="ob-step-label">Step 4 of 5 &#xB7; Your Title</p>
+          <h2 class="ob-heading">Pick your title</h2>
+          <p class="ob-sub">Shows under your name in the lobby and game.</p>
+          <div class="ob-title-grid" id="ob-title-grid">
+            <button class="ob-title-btn active" data-title="The Hustler">&#x1F3B1; The Hustler</button>
+            <button class="ob-title-btn" data-title="The Veteran">&#x1F44A; The Veteran</button>
+            <button class="ob-title-btn" data-title="The Rookie">&#x1F331; The Rookie</button>
+            <button class="ob-title-btn" data-title="The Sniper">&#x1F3AF; The Sniper</button>
+            <button class="ob-title-btn" data-title="The Ghost">&#x1F47B; The Ghost</button>
+            <button class="ob-title-btn" data-title="The Legend">&#x1F451; The Legend</button>
+            <button class="ob-title-btn" data-title="The Wildcard">&#x1F0CF; The Wildcard</button>
+            <button class="ob-title-btn" data-title="The Enforcer">&#x1F525; The Enforcer</button>
+          </div>
+          <button class="ob-btn-primary" id="ob-title-next">Next &#x2192;</button>
+        </div>
+
+        <!-- Step 5: Vibe -->
+        <div class="ob-step" id="ob-step-5" hidden>
+          <p class="ob-step-label">Step 5 of 5 &#xB7; Your Vibe</p>
+          <h2 class="ob-heading">How do you play?</h2>
+          <p class="ob-sub">Sets your default game style. Change anytime.</p>
+          <div class="ob-vibe-grid" id="ob-vibe-grid">
+            <button class="ob-vibe-btn active" data-vibe="aggressive">
+              <span class="ob-vibe-icon">&#x1F525;</span>
+              <span class="ob-vibe-name">Aggressive</span>
+              <span class="ob-vibe-desc">Go hard every shot</span>
+            </button>
+            <button class="ob-vibe-btn" data-vibe="tactical">
+              <span class="ob-vibe-icon">&#x1F9E0;</span>
+              <span class="ob-vibe-name">Tactical</span>
+              <span class="ob-vibe-desc">Think before you shoot</span>
+            </button>
+            <button class="ob-vibe-btn" data-vibe="safe">
+              <span class="ob-vibe-icon">&#x1F6E1;&#xFE0F;</span>
+              <span class="ob-vibe-name">Safety First</span>
+              <span class="ob-vibe-desc">Play the long game</span>
+            </button>
+            <button class="ob-vibe-btn" data-vibe="trickshot">
+              <span class="ob-vibe-icon">&#x2728;</span>
+              <span class="ob-vibe-name">Trick Shot</span>
+              <span class="ob-vibe-desc">Style over everything</span>
+            </button>
+          </div>
+          <button class="ob-btn-primary" id="ob-finish">&#x1F3B1; Enter the Clubhouse</button>
         </div>
       </div>
     </div>
 
-    <div id="tutorial-overlay" aria-modal="true" role="dialog" aria-label="How to play FELTORA">
+        <div id="tutorial-overlay" aria-modal="true" role="dialog" aria-label="How to play FELTORA">
       <div id="tutorial-backdrop"></div>
       <div id="tutorial-spotlight"></div>
       <svg id="tutorial-arrow" width="24" height="24" viewBox="0 0 24 24" style="display:none"><polygon points="12,0 24,24 0,24" fill="#00f0a8"/></svg>
@@ -934,13 +992,13 @@
 
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261105-v3" defer></script>
+  <script src="src/auth.js?v=20261106-ob6" defer></script>
   <script src="src/mascots.js?v=20261105-v3" defer></script>
   <script src="src/online.js?v=20261105-v3" defer></script>
-  <script src="src/game.js?v=20261105-v3" defer></script>
-  <script src="src/community.js?v=20261105-v3" defer></script>
-  <script src="src/onboarding.js?v=20261105-v3" defer></script>
-  <script src="src/phone.js?v=20261105-v3" defer></script>
+  <script src="src/game.js?v=20261106-ob6" defer></script>
+  <script src="src/community.js?v=20261106-ob6" defer></script>
+  <script src="src/onboarding.js?v=20261106-ob6" defer></script>
+  <script src="src/phone.js?v=20261106-ob6" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

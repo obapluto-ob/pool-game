@@ -91,12 +91,12 @@ function updateAvatarDisplays() {
   });
   document.querySelectorAll('[data-avatar]').forEach((button) => {
     const selected = button.dataset.avatar === playerAvatars[0];
-    button.querySelector('.avatar-choice-art').innerHTML = window.FeltoraMascots.render(button.dataset.avatar);
+    const artEl = button.querySelector('.avatar-choice-art'); if (artEl) artEl.innerHTML = window.FeltoraMascots.render(button.dataset.avatar);
     button.classList.toggle('active', selected);
     button.setAttribute('aria-pressed', String(selected));
   });
   document.querySelectorAll('[data-bot]').forEach((button) => {
-    button.querySelector('.bot-avatar-art').innerHTML = window.FeltoraMascots.render(button.dataset.bot);
+    const botArtEl = button.querySelector('.bot-avatar-art'); if (botArtEl) botArtEl.innerHTML = window.FeltoraMascots.render(button.dataset.bot);
     const selected = button.dataset.bot === botMascot;
     button.classList.toggle('active', selected);
     button.setAttribute('aria-pressed', String(selected));

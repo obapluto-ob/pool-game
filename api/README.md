@@ -11,7 +11,7 @@ Before deploying:
 5. Ensure Firebase Authentication and the Realtime Database are enabled for that project. The browser config, Admin credentials, and `FIREBASE_DATABASE_URL` must all refer to the same Firebase project and database.
 6. Publish [firebase-rules.json](../firebase-rules.json) to Realtime Database Rules before enabling the Community UI. Deploying the website to Vercel does **not** publish Firebase rules. Guests can read community posts; authenticated users can create, like, follow, or delete their own posts.
 7. Set `PAYSTACK_SECRET_KEY` in Vercel and configure Paystack to send signed webhook events to `/api/paystack-webhook`. Supporter badges and tip-tier cosmetics are granted by this verified webhook, not by the browser payment callback.
-8. Deploy through Vercel using Node.js 22.x, as configured in `package.json`; the Firebase Admin dependency chain requires a current Node 22 runtime. The existing Netlify configuration serves static files and does not deploy these `/api` functions.
+8. Deploy through Vercel using Node.js 22.x, as configured in `package.json`. Firebase Admin is pinned to 13.10.0 so its `jwks-rsa` dependency uses CommonJS-compatible `jose`; Firebase Admin 14 pulled ESM-only `jose`, which crashes the Vercel CommonJS function bundle. The existing Netlify configuration serves static files and does not deploy these `/api` functions.
 
 For the tournament Join action, include the host's Firebase UID as `hostUid` in `/tournament/active`; the app resolves the host profile and sends a direct message.
 

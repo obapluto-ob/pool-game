@@ -6,6 +6,11 @@ const Auth = (() => {
   const STORE_KEY = 'feltora-accounts';
   const SESSION_KEY = 'feltora-session';
   const CLOUD_SESSION_KEY = 'feltora-cloud-session';
+  const GOOGLE_SESSION_KEY = 'feltora-google-session';
+  let firebaseAuthInstance = null;
+  let firebaseAuthInitPromise = null;
+  let firebaseAuthStateReady = null;
+  let pendingGoogleUser = null;
 
   function hash(str) {
     let h = 5381;
@@ -50,6 +55,32 @@ const Auth = (() => {
     }
   }
 
+  function googleSession() {
+    try {
+      const data = JSON.parse(localStorage.getItem(GOOGLE_SESSION_KEY) || 'null');
+      return data && data.uid && data.username ? data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveGoogleSession(user, username) {
+    try {
+      localStorage.setItem(GOOGLE_SESSION_KEY, JSON.stringify({ uid: user.uid, username }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(username));
+    } catch {
+      throw new Error('Sign-in could not be saved on this device. Check browser storage settings and try again.');
+    }
+  }
+
+  function clearGoogleSession() {
+    try {
+      localStorage.removeItem(GOOGLE_SESSION_KEY);
+    } catch {
+      console.error('Could not clear the saved Google sign-in.');
+    }
+  }
+
   function setCloudSession(data, username) {
     try {
       localStorage.setItem(CLOUD_SESSION_KEY, JSON.stringify(Object.assign({}, data, { username })));
@@ -72,6 +103,77 @@ const Auth = (() => {
     const key = window.FeltoraFirebase && window.FeltoraFirebase.apiKey;
     if (!key) throw new Error('Firebase client configuration is not available.');
     return key;
+  }
+
+  async function getFirebaseAuth() {
+    if (firebaseAuthInstance) return firebaseAuthInstance;
+    if (firebaseAuthInitPromise) return firebaseAuthInitPromise;
+
+    firebaseAuthInitPromise = (async () => {
+      if (!window.firebase || !window.firebase.auth) {
+        throw new Error('Google sign-in is unavailable in this browser.');
+      }
+
+      const response = await fetch('/api/firebase-config', { cache: 'no-store' });
+      const config = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(config.error || 'Google sign-in is not configured.');
+
+      const appName = 'feltora-auth-client';
+      const app = window.firebase.apps.find((item) => item.name === appName)
+        || window.firebase.initializeApp(config, appName);
+      const auth = app.auth();
+      await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+      firebaseAuthInstance = auth;
+      firebaseAuthStateReady = new Promise((resolve, reject) => {
+        let unsubscribe = () => {};
+        unsubscribe = auth.onAuthStateChanged((user) => {
+          unsubscribe();
+          resolve(user);
+        }, reject);
+      });
+      await firebaseAuthStateReady;
+      return auth;
+    })();
+
+    try {
+      return await firebaseAuthInitPromise;
+    } catch (error) {
+      firebaseAuthInitPromise = null;
+      firebaseAuthInstance = null;
+      throw error;
+    }
+  }
+
+  async function resolveGoogleUser(user) {
+    if (!user || !window.FeltoraFirebase) throw new Error('Firebase sign-in is unavailable.');
+
+    clearCloudSession();
+    const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(user.uid));
+    if (!profile) {
+      pendingGoogleUser = user;
+      return { ok: false, needsUsername: true };
+    }
+    if (typeof profile.username !== 'string') throw new Error('This account has an invalid FELTORA profile.');
+
+    saveGoogleSession(user, profile.username);
+    storeAccount(profile.username, profile, getAccount(profile.username));
+    pendingGoogleUser = null;
+    return { ok: true, username: profile.username };
+  }
+
+  async function postAuthAction(action, data) {
+    const response = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action }, data))
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(result.error || 'Authentication request failed.');
+      error.status = response.status;
+      throw error;
+    }
+    return result;
   }
 
   async function callAuthEndpoint(action, username, pin, profile) {
@@ -133,6 +235,13 @@ const Auth = (() => {
     return account;
   }
 
+  function getAccount(username) {
+    if (typeof username !== 'string') return null;
+    const accounts = load();
+    const key = username.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(accounts, key) ? accounts[key] : null;
+  }
+
   function saveTokenSession(tokenResult, authResult) {
     const expiresIn = Number(tokenResult.expiresIn);
     setCloudSession({
@@ -146,24 +255,116 @@ const Auth = (() => {
   return {
     currentUser() {
       const cloud = cloudSession();
-      return cloud ? cloud.username || session() : null;
+      if (cloud) return cloud.username || session();
+      const google = googleSession();
+      return google && firebaseAuthInstance && firebaseAuthInstance.currentUser
+        && firebaseAuthInstance.currentUser.uid === google.uid ? google.username : null;
     },
 
     uid() {
       const cloud = cloudSession();
-      return cloud ? cloud.uid : null;
+      if (cloud) return cloud.uid;
+      const google = googleSession();
+      return google && firebaseAuthInstance && firebaseAuthInstance.currentUser
+        && firebaseAuthInstance.currentUser.uid === google.uid ? google.uid : null;
+    },
+
+    async initialize() {
+      const savedGoogleSession = googleSession();
+      try {
+        const auth = await getFirebaseAuth();
+        const redirectResult = await auth.getRedirectResult();
+        const user = (redirectResult && redirectResult.user) || auth.currentUser;
+        if (user) return resolveGoogleUser(user);
+        if (savedGoogleSession) clearGoogleSession();
+        return null;
+      } catch (error) {
+        if (savedGoogleSession) throw error;
+        return null;
+      }
+    },
+
+    async googleSignIn() {
+      try {
+        const auth = await getFirebaseAuth();
+        const provider = new window.firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        if (window.matchMedia('(max-width: 760px)').matches) {
+          await auth.signInWithRedirect(provider);
+          return { ok: true, redirecting: true };
+        }
+        const result = await auth.signInWithPopup(provider);
+        return await resolveGoogleUser(result.user);
+      } catch (error) {
+        return { ok: false, error: error.message || 'Google sign-in failed.' };
+      }
+    },
+
+    async completeGoogleRegistration(username) {
+      const user = pendingGoogleUser || (firebaseAuthInstance && firebaseAuthInstance.currentUser);
+      if (!user) return { ok: false, error: 'Sign in with Google before creating your FELTORA profile.' };
+      try {
+        const existing = getAccount(username);
+        const result = await postAuthAction('google-register', {
+          username,
+          idToken: await user.getIdToken(),
+          profile: existing ? localProfile(existing) : { displayName: user.displayName }
+        });
+        saveGoogleSession(user, result.username);
+        storeAccount(result.username, result.profile, getAccount(result.username));
+        pendingGoogleUser = null;
+        return { ok: true, username: result.username };
+      } catch (error) {
+        return { ok: false, error: error.message || 'Could not create your FELTORA profile.' };
+      }
+    },
+
+    async cancelGoogleSignIn() {
+      pendingGoogleUser = null;
+      clearGoogleSession();
+      if (firebaseAuthInstance) await firebaseAuthInstance.signOut();
+    },
+
+    async linkGoogle() {
+      const username = this.currentUser();
+      const uid = this.uid();
+      if (!username || !uid) return { ok: false, error: 'Sign in to your FELTORA account first.' };
+
+      try {
+        const tokenResult = await postAuthAction('google-link-token', {
+          idToken: await this.getIdToken()
+        });
+        const auth = await getFirebaseAuth();
+        if (!auth.currentUser || auth.currentUser.uid !== uid) {
+          await auth.signInWithCustomToken(tokenResult.customToken);
+        }
+        const provider = new window.firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        if (window.matchMedia('(max-width: 760px)').matches) {
+          await auth.currentUser.linkWithRedirect(provider);
+          return { ok: true, redirecting: true };
+        }
+        const result = await auth.currentUser.linkWithPopup(provider);
+        if (result.user.uid !== uid) throw new Error('The Google account could not be linked to this profile.');
+        saveGoogleSession(result.user, username);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error.message || 'Google could not be linked to this account.' };
+      }
+    },
+
+    isGoogleLinked() {
+      return !!(firebaseAuthInstance && firebaseAuthInstance.currentUser
+        && firebaseAuthInstance.currentUser.providerData.some((provider) => provider.providerId === 'google.com'));
     },
 
     getAccount(username) {
-      if (typeof username !== 'string') return null;
-      const accounts = load();
-      const key = username.toLowerCase();
-      return Object.prototype.hasOwnProperty.call(accounts, key) ? accounts[key] : null;
+      return getAccount(username);
     },
 
     async refreshProfile() {
-      const cloud = cloudSession();
-      if (!cloud) return null;
+      const cloud = cloudSession() || googleSession();
+      if (!cloud || !this.currentUser()) return null;
       if (!window.FeltoraFirebase) throw new Error('Firebase profile service is unavailable.');
 
       const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(cloud.uid));
@@ -230,7 +431,12 @@ const Auth = (() => {
 
     async getIdToken() {
       const cloud = cloudSession();
-      if (!cloud) return null;
+      if (!cloud) {
+        const google = googleSession();
+        const user = firebaseAuthInstance && firebaseAuthInstance.currentUser;
+        if (!google || !user || user.uid !== google.uid) return null;
+        return user.getIdToken();
+      }
       if (cloud.idToken && cloud.expiresAt > Date.now() + 60_000) return cloud.idToken;
 
       const response = await fetch(
@@ -264,8 +470,11 @@ const Auth = (() => {
       return refreshed.idToken;
     },
 
-    logout() {
+    async logout() {
       clearCloudSession();
+      clearGoogleSession();
+      pendingGoogleUser = null;
+      if (firebaseAuthInstance) await firebaseAuthInstance.signOut();
     },
 
     update(fields) {

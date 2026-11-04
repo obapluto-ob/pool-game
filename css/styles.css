@@ -1624,6 +1624,7 @@ button:disabled {
   grid-template-columns: 1fr 1fr;
   border-bottom: 1px solid var(--line);
 }
+.auth-tabs[hidden] { display: none; }
 .auth-tab {
   padding: 14px;
   font-size: 0.82rem;
@@ -1645,6 +1646,54 @@ button:disabled {
 
 .auth-panel { padding: 22px 20px; display: grid; gap: 14px; }
 .auth-panel[hidden] { display: none; }
+.auth-provider { padding: 0 20px 20px; display: grid; gap: 10px; }
+.auth-provider[hidden] { display: none; }
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 0.66rem; }
+.auth-or::before,
+.auth-or::after { content: ''; height: 1px; flex: 1; background: var(--line); }
+.google-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--t-base), border-color var(--t-base), transform var(--t-base);
+}
+.google-signin-btn:hover { background: var(--panel-soft); border-color: var(--muted); }
+.google-signin-btn:active { transform: scale(0.99); }
+.google-signin-btn:disabled { opacity: 0.6; cursor: wait; }
+.google-signin-btn svg { width: 19px; height: 19px; flex: 0 0 19px; }
+.google-signin-note,
+.google-setup-copy,
+.google-link-status { margin: 0; color: var(--faint); font-size: 0.68rem; line-height: 1.5; }
+.google-signin-note { text-align: center; }
+.google-setup-title { margin: 0 0 5px; font-size: 1rem; }
+.google-setup-copy { max-width: 34ch; }
+.auth-link-google-btn {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-link-google-btn:hover { border-color: var(--accent); color: var(--accent); }
+.auth-link-google-btn:disabled { opacity: 0.6; cursor: wait; }
+.auth-link-google-btn[hidden],
+.google-link-status[hidden] { display: none; }
 
 .auth-field { display: grid; gap: 6px; }
 .auth-field input {

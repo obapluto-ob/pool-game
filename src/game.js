@@ -2382,6 +2382,18 @@ applyTheme(initialTheme);
 
 // ── Auth boot ────────────────────────────────────────────────────
 async function bootAuth() {
+  try {
+    const result = await window.FeltoraAuth.initialize();
+    if (result && result.needsUsername) {
+      showGoogleUsernamePanel();
+      showScreen('auth');
+      return;
+    }
+  } catch (error) {
+    console.error('Google sign-in restore failed:', error);
+    showAuthError('login-error', error.message || 'Your saved Google sign-in could not be restored.');
+  }
+
   const user = window.FeltoraAuth.currentUser();
   if (user) {
     applyAccountToLobby(user);
@@ -2430,6 +2442,12 @@ function applyAccountToLobby(username) {
   document.getElementById('profile-account-tag').textContent = `@${acc.username}`;
   document.getElementById('profile-stats').hidden = false;
   document.getElementById('btn-signout').hidden = false;
+  const linkButton = document.getElementById('btn-link-google');
+  const linkStatus = document.getElementById('google-link-status');
+  const googleLinked = window.FeltoraAuth.isGoogleLinked();
+  linkButton.hidden = googleLinked;
+  linkStatus.hidden = !googleLinked;
+  if (googleLinked) linkStatus.textContent = 'Google is linked to this account.';
   document.getElementById('stat-wins').textContent   = acc.stats.wins;
   document.getElementById('stat-losses').textContent = acc.stats.losses;
   document.getElementById('stat-frames').textContent = acc.stats.frames;
@@ -2445,6 +2463,8 @@ function applyGuestProfile() {
   document.getElementById('profile-account-tag').textContent = 'Guest';
   document.getElementById('profile-stats').hidden = true;
   document.getElementById('btn-signout').hidden = true;
+  document.getElementById('btn-link-google').hidden = true;
+  document.getElementById('google-link-status').hidden = true;
   document.getElementById('display-name').value = 'Guest Player';
   updateProfileName('Guest Player');
   setProfileAvatar('marlow');
@@ -2456,14 +2476,109 @@ function applyGuestProfile() {
 document.getElementById('tab-login').addEventListener('click', () => {
   document.getElementById('tab-login').classList.add('active');
   document.getElementById('tab-register').classList.remove('active');
+  document.getElementById('tab-login').setAttribute('aria-selected', 'true');
+  document.getElementById('tab-register').setAttribute('aria-selected', 'false');
+  document.getElementById('auth-tabs').hidden = false;
   document.getElementById('panel-login').hidden = false;
   document.getElementById('panel-register').hidden = true;
+  document.getElementById('panel-google-username').hidden = true;
+  document.getElementById('auth-provider').hidden = false;
 });
 document.getElementById('tab-register').addEventListener('click', () => {
   document.getElementById('tab-register').classList.add('active');
   document.getElementById('tab-login').classList.remove('active');
+  document.getElementById('tab-register').setAttribute('aria-selected', 'true');
+  document.getElementById('tab-login').setAttribute('aria-selected', 'false');
+  document.getElementById('auth-tabs').hidden = false;
   document.getElementById('panel-register').hidden = false;
   document.getElementById('panel-login').hidden = true;
+  document.getElementById('panel-google-username').hidden = true;
+  document.getElementById('auth-provider').hidden = false;
+});
+
+function showGoogleUsernamePanel() {
+  document.getElementById('auth-tabs').hidden = true;
+  document.getElementById('panel-login').hidden = true;
+  document.getElementById('panel-register').hidden = true;
+  document.getElementById('panel-google-username').hidden = false;
+  document.getElementById('auth-provider').hidden = true;
+  document.getElementById('google-username').focus();
+}
+
+function showAuthenticatedLobby(username) {
+  try { localStorage.setItem('feltora-last-user', username); } catch {}
+  applyAccountToLobby(username);
+  showScreen('lobby');
+}
+
+document.getElementById('btn-google-signin').addEventListener('click', async () => {
+  clearAuthError('login-error');
+  clearAuthError('google-error');
+  const button = document.getElementById('btn-google-signin');
+  button.disabled = true;
+  try {
+    const result = await window.FeltoraAuth.googleSignIn();
+    if (result.redirecting) return;
+    if (result.needsUsername) {
+      showGoogleUsernamePanel();
+      return;
+    }
+    if (!result.ok) {
+      showAuthError('login-error', result.error || 'Google sign-in failed.');
+      return;
+    }
+    showAuthenticatedLobby(result.username);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('btn-google-finish').addEventListener('click', async () => {
+  clearAuthError('google-error');
+  const username = document.getElementById('google-username').value.trim().toLowerCase();
+  const button = document.getElementById('btn-google-finish');
+  button.disabled = true;
+  try {
+    const result = await window.FeltoraAuth.completeGoogleRegistration(username);
+    if (!result.ok) {
+      showAuthError('google-error', result.error || 'Could not finish account setup.');
+      return;
+    }
+    showAuthenticatedLobby(result.username);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('google-username').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') document.getElementById('btn-google-finish').click();
+});
+
+document.getElementById('btn-google-cancel').addEventListener('click', async () => {
+  try {
+    await window.FeltoraAuth.cancelGoogleSignIn();
+    document.getElementById('auth-tabs').hidden = false;
+    document.getElementById('tab-login').click();
+  } catch (error) {
+    showAuthError('google-error', error.message || 'Could not cancel Google sign-in.');
+  }
+});
+
+document.getElementById('btn-link-google').addEventListener('click', async () => {
+  const button = document.getElementById('btn-link-google');
+  const status = document.getElementById('google-link-status');
+  button.disabled = true;
+  status.hidden = false;
+  status.textContent = 'Connecting Google…';
+  const result = await window.FeltoraAuth.linkGoogle();
+  if (result.redirecting) return;
+  button.disabled = false;
+  if (!result.ok) {
+    status.textContent = result.error || 'Google could not be linked.';
+    return;
+  }
+  button.hidden = true;
+  status.textContent = 'Google is linked to this account.';
 });
 
 function showAuthError(id, msg) {
@@ -2550,7 +2665,7 @@ document.getElementById('btn-guest').addEventListener('click', () => {
 });
 
 document.getElementById('btn-signout').addEventListener('click', () => {
-  window.FeltoraAuth.logout();
+  void window.FeltoraAuth.logout().catch((error) => console.error('Sign-out failed:', error));
   applyGuestProfile();
   showScreen('auth');
 });

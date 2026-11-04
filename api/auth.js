@@ -34,13 +34,18 @@ function parseBody(body) {
   return body && typeof body === 'object' ? body : {};
 }
 
-function validateCredentials(body) {
-  const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
-  const pin = typeof body.pin === 'string' ? body.pin : '';
-
+function validateUsername(value) {
+  const username = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!/^[a-z0-9_]{3,18}$/.test(username)) {
     throw httpError(400, 'Username must be 3–18 characters using letters, numbers, or underscores.');
   }
+  return username;
+}
+
+function validateCredentials(body) {
+  const username = validateUsername(body.username);
+  const pin = typeof body.pin === 'string' ? body.pin : '';
+
   if (!/^\d{4}$/.test(pin)) throw httpError(400, 'PIN must be exactly 4 digits.');
   return { username, pin };
 }
@@ -109,6 +114,79 @@ function publicProfile(username, input) {
     createdAt: Date.now(),
     stats: { wins: 0, losses: 0, frames: 0 }
   };
+}
+
+async function verifyGoogleIdToken(auth, idToken) {
+  if (typeof idToken !== 'string' || idToken.length > 8192) {
+    throw httpError(400, 'Google sign-in could not be verified.');
+  }
+
+  let decoded;
+  try {
+    decoded = await auth.verifyIdToken(idToken);
+  } catch {
+    throw httpError(401, 'Google sign-in expired. Please try again.');
+  }
+  if (!decoded.firebase || decoded.firebase.sign_in_provider !== 'google.com') {
+    throw httpError(401, 'Sign in with a Google account to continue.');
+  }
+  return decoded;
+}
+
+async function registerGoogleUser(auth, database, body, req) {
+  const username = validateUsername(body.username);
+  const decoded = await verifyGoogleIdToken(auth, body.idToken);
+  const uid = decoded.uid;
+  const profileRef = database.ref('/profiles/' + uid);
+  const existingProfile = (await profileRef.once('value')).val();
+
+  if (existingProfile) {
+    if (existingProfile.username !== username) {
+      throw httpError(409, 'This Google account already has a FELTORA username.');
+    }
+    const reservation = (await database.ref('/authUsernames/' + username).once('value')).val();
+    if (reservation !== uid) throw httpError(403, 'This FELTORA account could not be verified.');
+    return { uid, username, profile: existingProfile };
+  }
+
+  const ipKey = rateLimitKey('google-register:' + getClientIp(req));
+  await assertNotRateLimited(database, ipKey);
+  const reservation = await database.ref('/authUsernames/' + username)
+    .transaction((current) => current === null || current === uid ? uid : undefined);
+  if (!reservation.committed) {
+    await recordFailedAttempt(database, ipKey, 10);
+    throw httpError(409, 'That username is unavailable.');
+  }
+
+  const profile = publicProfile(username, Object.assign(
+    { displayName: decoded.name },
+    body.profile && typeof body.profile === 'object' ? body.profile : {}
+  ));
+  try {
+    await profileRef.set(profile);
+  } catch (error) {
+    await database.ref('/authUsernames/' + username)
+      .transaction((current) => current === uid ? null : undefined);
+    throw error;
+  }
+  return { uid, username, profile };
+}
+
+async function createGoogleLinkToken(auth, database, idToken) {
+  let decoded;
+  try {
+    decoded = await auth.verifyIdToken(idToken);
+  } catch {
+    throw httpError(401, 'Your sign-in expired. Please sign in again before linking Google.');
+  }
+  const profile = (await database.ref('/profiles/' + decoded.uid).once('value')).val();
+  if (!profile || typeof profile.username !== 'string') {
+    throw httpError(403, 'Sign in to your FELTORA account before linking Google.');
+  }
+
+  const reservation = (await database.ref('/authUsernames/' + profile.username).once('value')).val();
+  if (reservation !== decoded.uid) throw httpError(403, 'This FELTORA account could not be verified.');
+  return auth.createCustomToken(decoded.uid, { username: profile.username });
 }
 
 async function register(auth, database, username, pin, profileInput, req) {
@@ -201,9 +279,18 @@ module.exports = async function handler(req, res) {
   let body;
   try {
     body = parseBody(req.body);
-    const { username, pin } = validateCredentials(body);
     const { auth, database } = getServices();
 
+    if (body.action === 'google-register') {
+      const result = await registerGoogleUser(auth, database, body, req);
+      return res.status(201).json(result);
+    }
+    if (body.action === 'google-link-token') {
+      const customToken = await createGoogleLinkToken(auth, database, body.idToken);
+      return res.status(200).json({ customToken });
+    }
+
+    const { username, pin } = validateCredentials(body);
     if (body.action === 'register') {
       const result = await register(auth, database, username, pin, body.profile, req);
       return res.status(201).json(result);

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261107-v5">
+  <link rel="stylesheet" href="css/styles.css?v=20261107-v6">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -45,7 +45,7 @@
         </div>
 
         <div class="auth-card panel">
-          <div class="auth-tabs" role="tablist">
+          <div class="auth-tabs" id="auth-tabs" role="tablist">
             <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true" aria-controls="panel-login" type="button">Sign in</button>
             <button class="auth-tab" id="tab-register" role="tab" aria-selected="false" aria-controls="panel-register" type="button">Create account</button>
           </div>
@@ -87,6 +87,37 @@
             <button class="mode-btn primary auth-submit" id="btn-register" type="button">
               <span>Create account</span><span class="meta">→</span>
             </button>
+          </div>
+
+          <div class="auth-panel google-username-panel" id="panel-google-username" hidden>
+            <div>
+              <h2 class="google-setup-title">Choose your FELTORA username</h2>
+              <p class="google-setup-copy">Your Google account secures sign-in. Your username is how other players find you.</p>
+            </div>
+            <div class="auth-field">
+              <label class="mini-label" for="google-username">Username</label>
+              <input id="google-username" type="text" autocomplete="username" placeholder="choose_a_name" maxlength="18">
+              <small>3–18 chars, letters/numbers/underscore only</small>
+            </div>
+            <p class="auth-error" id="google-error" hidden></p>
+            <button class="mode-btn primary auth-submit" id="btn-google-finish" type="button">
+              <span>Finish setup</span><span class="meta">→</span>
+            </button>
+            <button class="auth-guest-btn" id="btn-google-cancel" type="button">Use another sign-in method</button>
+          </div>
+
+          <div class="auth-provider" id="auth-provider">
+            <div class="auth-or"><span>or</span></div>
+            <button class="google-signin-btn" id="btn-google-signin" type="button">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/>
+                <path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/>
+                <path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/>
+                <path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+            <p class="google-signin-note">Google sign-in syncs your FELTORA profile across devices.</p>
           </div>
         </div>
       </div>
@@ -144,6 +175,8 @@
                 <div class="stat-chip"><strong id="stat-frames">0</strong><span>Frames</span></div>
               </div>
             </div>
+            <button class="auth-link-google-btn" id="btn-link-google" type="button" hidden>Link Google for easier sign-in</button>
+            <p class="google-link-status" id="google-link-status" hidden></p>
             <button class="auth-signout-btn" id="btn-signout" type="button" hidden>Sign out</button>
           </section>
 
@@ -1058,13 +1091,15 @@
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261107-v5" defer></script>
+  <script src="src/auth.js?v=20261107-v6" defer></script>
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>
-  <script src="src/game.js?v=20261107-v5" defer></script>
+  <script src="src/game.js?v=20261107-v6" defer></script>
   <script src="src/community.js?v=20261107-v5" defer></script>
   <script src="src/onboarding.js?v=20261107-v5" defer></script>
   <script src="src/firebase.js?v=20261107-v5" defer></script>

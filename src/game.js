@@ -2819,3 +2819,46 @@ window.addEventListener('beforeunload', (e) => {
     e.returnValue = '';
   }
 });
+
+// ── Lobby bottom nav ─────────────────────────────────────────────
+(function() {
+  var lbnCommunity = document.getElementById('lbn-community');
+  var lbnHome = document.getElementById('lbn-home');
+  var lbnPhone = document.getElementById('lbn-phone');
+
+  if (lbnCommunity) {
+    lbnCommunity.addEventListener('click', function() {
+      showScreen('community');
+      if (typeof communityRenderFeed === 'function') communityRenderFeed();
+    });
+  }
+
+  if (lbnHome) {
+    lbnHome.addEventListener('click', function() {
+      showScreen('lobby');
+    });
+  }
+
+  if (lbnPhone) {
+    lbnPhone.addEventListener('click', function() {
+      // Open the phone modal — same as game-phone-fab
+      var modal = document.getElementById('game-phone-modal');
+      var inner = document.getElementById('game-phone-modal-inner');
+      var frame = document.getElementById('phone-frame');
+      if (!modal || !inner || !frame) return;
+      if (!inner.contains(frame)) inner.appendChild(frame);
+      modal.hidden = false;
+    });
+  }
+
+  // Keep home tab highlighted when on lobby
+  var origShow = window.showScreen;
+  if (typeof showScreen === 'function') {
+    var _orig = showScreen;
+    showScreen = function(name) {
+      _orig(name);
+      if (lbnHome) lbnHome.classList.toggle('active', name === 'lobby');
+      if (lbnCommunity) lbnCommunity.classList.toggle('active', name === 'community');
+    };
+  }
+})();

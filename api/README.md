@@ -5,7 +5,7 @@ The authentication endpoint is a Vercel Function at `/api/auth`. It uses Firebas
 Before deploying:
 
 1. Add the Firebase Admin service-account JSON to Vercel as `FIREBASE_SERVICE_ACCOUNT_JSON`. Never commit this credential or paste it into chat.
-2. Set `FIREBASE_DATABASE_URL` to the Realtime Database URL for the same Firebase project. If omitted, the function uses the FELTORA database URL.
+2. Set `FIREBASE_DATABASE_URL` to the Realtime Database URL for the same Firebase project. The auth endpoint uses `FIREBASE_WEB_CONFIG.databaseURL` when this variable is omitted; the payment webhook falls back to the FELTORA database URL. Auth compares normalized URLs, ignoring surrounding whitespace, hostname casing, and trailing slashes.
 3. Set `FIREBASE_WEB_CONFIG` to the Firebase **Web app config JSON** from Project settings → General → Your apps. It needs `apiKey`, `authDomain`, `projectId`, and `appId`; include the database URL and other public fields from the same project when available. This is public client configuration, not the Admin service-account JSON.
 4. In Firebase Console → Authentication, enable the Google provider and add the production hostname (for example, `pool-game-gamma.vercel.app`) and the local development hostname (`127.0.0.1` or `localhost`, as used) to the authorized domains list. The domain in the browser address bar must be authorized for popup and redirect sign-in.
 5. Ensure Firebase Authentication and the Realtime Database are enabled for that project. The browser config, Admin credentials, and `FIREBASE_DATABASE_URL` must all refer to the same Firebase project and database.

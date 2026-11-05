@@ -5,13 +5,24 @@ const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
 
 const scrypt = promisify(crypto.scrypt);
-const DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://feltora-spots-default-rtdb.firebaseio.com';
+const DEFAULT_DATABASE_URL = 'https://feltora-spots-default-rtdb.firebaseio.com';
 const RATE_WINDOW_MS = 15 * 60 * 1000;
 
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function normalizeDatabaseUrl(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    return url.origin.toLowerCase() + url.pathname.replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
 }
 
 function getServices() {
@@ -34,19 +45,35 @@ function getServices() {
   }
 
   const webConfigJson = process.env.FIREBASE_WEB_CONFIG;
+  const configuredDatabaseUrl = typeof process.env.FIREBASE_DATABASE_URL === 'string'
+    ? process.env.FIREBASE_DATABASE_URL.trim()
+    : '';
+  let webConfig;
   if (webConfigJson) {
     try {
-      const webConfig = JSON.parse(webConfigJson);
+      webConfig = JSON.parse(webConfigJson);
       if (webConfig.projectId && webConfig.projectId !== serviceAccount.project_id) {
         throw httpError(503, 'Firebase web and server configurations use different projects. Set both to the same Firebase project in Vercel.');
       }
-      if (webConfig.databaseURL && webConfig.databaseURL.replace(/\/+$/, '') !== DATABASE_URL.replace(/\/+$/, '')) {
-        throw httpError(503, 'Firebase web and server configurations use different Realtime Databases. Set FIREBASE_DATABASE_URL to the databaseURL in FIREBASE_WEB_CONFIG.');
+      if (webConfig.databaseURL) {
+        const webDatabaseUrl = normalizeDatabaseUrl(webConfig.databaseURL);
+        const serverDatabaseUrl = normalizeDatabaseUrl(configuredDatabaseUrl || webConfig.databaseURL);
+        if (!webDatabaseUrl || !serverDatabaseUrl) {
+          throw httpError(503, 'Firebase Realtime Database URL is invalid. Check FIREBASE_DATABASE_URL and FIREBASE_WEB_CONFIG in Vercel.');
+        }
+        if (webDatabaseUrl !== serverDatabaseUrl) {
+          throw httpError(503, 'Firebase web and server configurations use different Realtime Databases. Set FIREBASE_DATABASE_URL to the databaseURL in FIREBASE_WEB_CONFIG.');
+        }
       }
     } catch (error) {
       if (Number.isInteger(error.status)) throw error;
       throw httpError(503, 'Firebase web configuration is invalid. Check FIREBASE_WEB_CONFIG in Vercel.');
     }
+  }
+
+  let databaseUrl = configuredDatabaseUrl || DEFAULT_DATABASE_URL;
+  if (!configuredDatabaseUrl && webConfig && webConfig.databaseURL) {
+    databaseUrl = webConfig.databaseURL.trim();
   }
 
   const existing = getApps().find((app) => app.name === 'feltora-auth');
@@ -55,7 +82,7 @@ function getServices() {
     try {
       app = initializeApp({
         credential: cert(serviceAccount),
-        databaseURL: DATABASE_URL
+        databaseURL: databaseUrl
       }, 'feltora-auth');
     } catch {
       throw httpError(503, 'Firebase Admin credentials could not be initialized. Check the service-account key and FIREBASE_DATABASE_URL in Vercel.');

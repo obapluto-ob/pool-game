@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261107-v9">
+  <link rel="stylesheet" href="css/styles.css?v=20261107-v11">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -700,6 +700,14 @@
                       <span class="pai-art pai-messages">&#x1F4AC;</span>
                       <span>Messages</span>
                     </button>
+                    <button class="phone-app-icon" data-open="activity" aria-label="Wallet activity and notifications">
+                      <span class="pai-art pai-notifications">&#x1F514;</span>
+                      <span>Activity</span>
+                    </button>
+                    <button class="phone-app-icon" data-open="notes" aria-label="Notes">
+                      <span class="pai-art pai-notes">&#x1F4DD;</span>
+                      <span>Notes</span>
+                    </button>
                     <button class="phone-app-icon" data-open="camera" aria-label="Camera">
                       <span class="pai-art pai-camera">&#x1F4F7;</span>
                       <span>Camera</span>
@@ -801,7 +809,21 @@
                 <!-- Messages -->
                 <div class="phone-view" id="phone-messages">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Messages</span><span></span></div>
-                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F4AC; No messages yet.<br><small>Challenge a friend to FELTORA!</small></p></div>
+                  <div id="phone-message-inbox" class="phone-message-inbox"></div>
+                </div>
+                <div class="phone-view" id="phone-activity">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Wallet activity</span><button class="wallet-refresh-btn" id="activity-refresh" type="button" aria-label="Refresh wallet activity">↻</button></div>
+                  <p class="wallet-activity-note">Your top-ups, purchases, and credit transfers are saved here.</p>
+                  <div id="wallet-activity-list" class="wallet-transactions wallet-activity-list"><p>Sign in to load wallet activity.</p></div>
+                </div>
+                <div class="phone-view" id="phone-notes">
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Notes</span><span></span></div>
+                  <div class="phone-notes-content">
+                    <p>Private notes saved on this device.</p>
+                    <textarea id="phone-notes-input" maxlength="5000" placeholder="Write down a shot idea, practice plan, or reminder…"></textarea>
+                    <div class="phone-notes-footer"><span id="phone-notes-count">0 / 5000</span><span id="phone-notes-status" role="status" aria-live="polite">Saved automatically</span></div>
+                    <button id="phone-notes-clear" class="wallet-action-btn secondary" type="button">Clear notes</button>
+                  </div>
                 </div>
                 <div class="phone-view" id="phone-camera">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Camera</span><span></span></div>
@@ -818,8 +840,13 @@
                   </div>
                 </div>
                 <div class="phone-view" id="phone-music">
-                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Music</span><span></span></div>
-                  <div class="phone-dummy-app"><p class="phone-dummy-msg">&#x1F3B5; Now playing<br><strong style="color:var(--accent)">Lounge Mode</strong><br><small>FELTORA Soundtrack</small></p></div>
+                  <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Live music</span><span></span></div>
+                  <div class="phone-music-content">
+                    <div class="phone-music-now"><span>LIVE RADIO</span><strong id="music-now-playing">Choose a station</strong><p id="music-status" role="status" aria-live="polite">Free streams from radio broadcasters. Playback needs an internet connection.</p><button id="music-play-btn" class="wallet-action-btn secondary" type="button">▶ Play station</button></div>
+                    <div class="phone-music-section-title">Available stations</div>
+                    <div id="music-stations-list" class="phone-music-stations"></div>
+                    <a class="phone-radio-source" href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">Station directory: Radio Browser</a>
+                  </div>
                 </div>
                 <div class="phone-view" id="phone-gallery">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Gallery</span><span></span></div>
@@ -848,6 +875,11 @@
                 <!-- Contacts app -->
                 <div class="phone-view" id="phone-contacts">
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">Contacts</span><span></span></div>
+                  <div class="phone-contacts-add">
+                    <label for="phone-contact-search">Find a FELTORA player</label>
+                    <div><input id="phone-contact-search" type="search" maxlength="18" autocomplete="off" placeholder="Enter exact username"><button id="phone-contact-add" type="button">Add</button></div>
+                    <p id="phone-contact-status" role="status" aria-live="polite"></p>
+                  </div>
                   <div id="phone-contacts-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;"></div>
                   <div id="phone-chat-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
                     <div class="phone-app-header">
@@ -884,13 +916,18 @@
                   <div class="phone-app-header"><button class="phone-back-btn" data-back="home">&#x2190;</button><span class="phone-app-title">FELTORA Wallet</span><button class="wallet-refresh-btn" id="wallet-refresh" type="button" aria-label="Refresh wallet">↻</button></div>
                   <div class="wallet-content">
                     <section class="wallet-balance-card" aria-label="Game credit balance">
-                      <span>GAME CREDIT BALANCE</span>
+                      <div class="wallet-balance-heading"><span>AVAILABLE BALANCE</span><button class="wallet-refresh-btn" id="wallet-refresh" type="button" aria-label="Refresh wallet">↻</button></div>
                       <strong id="wallet-balance">0</strong>
-                      <small>1 KSh = 10 credits · Credits are for use in FELTORA only.</small>
+                      <small>Game credits · 10 credits = KSh 1 for reference</small>
                     </section>
                     <p class="wallet-status" id="wallet-status" role="status" aria-live="polite"></p>
                     <button class="wallet-action-btn" id="wallet-signin" type="button" hidden>Sign in to use your wallet</button>
-                    <section class="wallet-section">
+                    <section class="wallet-quick-actions" aria-label="Wallet actions">
+                      <button class="wallet-quick-action" id="wallet-open-topup" type="button"><span aria-hidden="true">＋</span><strong>Add</strong></button>
+                      <button class="wallet-quick-action" id="wallet-open-send" type="button"><span aria-hidden="true">↗</span><strong>Send</strong></button>
+                      <button class="wallet-quick-action" id="wallet-open-receive" type="button"><span aria-hidden="true">↙</span><strong>Receive</strong></button>
+                    </section>
+                    <section class="wallet-section wallet-action-panel" id="wallet-topup-panel" hidden>
                       <h3>Add game credits</h3>
                       <p>Pay securely with Paystack. M-Pesa and other available methods appear at checkout.</p>
                       <label for="wallet-topup-amount">Amount (KES)</label>
@@ -900,7 +937,7 @@
                       <button class="wallet-action-btn" id="wallet-topup" type="button">Continue to secure checkout</button>
                       <small>Top up KSh 100–100,000. Purchased credits cannot be withdrawn or exchanged for cash.</small>
                     </section>
-                    <section class="wallet-section">
+                    <section class="wallet-section wallet-action-panel" id="wallet-send-panel" hidden>
                       <h3>Send credits to a player</h3>
                       <p>Transfers are final. Check the recipient username before sending.</p>
                       <label for="wallet-recipient">Player username</label>
@@ -908,6 +945,12 @@
                       <label for="wallet-transfer-amount">Credits to send</label>
                       <input id="wallet-transfer-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 100">
                       <button class="wallet-action-btn secondary" id="wallet-send" type="button">Review and send credits</button>
+                    </section>
+                    <section class="wallet-section wallet-action-panel wallet-receive-panel" id="wallet-receive-panel" hidden>
+                      <h3>Receive game credits</h3>
+                      <p>Share your player username with another FELTORA player. They can send credits to you from their wallet.</p>
+                      <div class="wallet-handle-row"><strong id="wallet-handle">@player</strong><button class="wallet-action-btn secondary" id="wallet-copy-handle" type="button">Copy username</button></div>
+                      <small>Wallet credits are for use in FELTORA only. They cannot be withdrawn or exchanged for cash.</small>
                     </section>
                     <section class="wallet-section wallet-history-section">
                       <h3>Recent activity</h3>
@@ -1224,12 +1267,12 @@
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>
-  <script src="src/game.js?v=20261107-v11" defer></script>
+  <script src="src/game.js?v=20261107-v12" defer></script>
   <script src="src/community.js?v=20261107-v10" defer></script>
   <script src="src/onboarding.js?v=20261107-v9" defer></script>
   <script src="src/firebase.js?v=20261107-v6" defer></script>
-  <script src="src/store.js?v=20261107-v3" defer></script>
-  <script src="src/phone.js?v=20261107-v11" defer></script>
+  <script src="src/store.js?v=20261107-v4" defer></script>
+  <script src="src/phone.js?v=20261107-v13" defer></script>
   <script>
     // Interactive logo — click spins the 8-ball and strikes the cue
     function triggerLogoSpin(el) {

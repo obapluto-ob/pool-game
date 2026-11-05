@@ -3615,6 +3615,8 @@ h1 {
   overflow: hidden;
 }
 .pai-messages { background: linear-gradient(135deg, #34c759, #30d158); }
+.pai-notifications { background: linear-gradient(135deg, #ff9f0a, #ff375f); }
+.pai-notes { background: linear-gradient(135deg, #ffd60a, #ff9f0a); }
 .pai-camera   { background: linear-gradient(135deg, #1c1c1e, #3a3a3c); }
 .pai-music    { background: linear-gradient(135deg, #ff2d55, #ff375f); }
 .pai-gallery  { background: linear-gradient(135deg, #ff9f0a, #ffcc02); }
@@ -3931,47 +3933,92 @@ h1 {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 12px 20px;
-  background: #07140e;
+  padding: 14px 14px 22px;
+  background: linear-gradient(180deg, #0b1912, #07110d 40%);
   color: var(--text);
   overscroll-behavior: contain;
 }
 .wallet-balance-card {
   display: grid;
-  justify-items: center;
-  gap: 6px;
-  padding: 16px 12px;
+  gap: 8px;
+  padding: 17px 16px;
   border: 1px solid rgba(0,240,168,.32);
-  border-radius: 16px;
-  background: radial-gradient(ellipse at 50% 0, rgba(0,240,168,.18), transparent 70%), #10251a;
-  text-align: center;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 90% 0, rgba(0,240,168,.2), transparent 65%), linear-gradient(135deg, #142d20, #0e2017);
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+  text-align: left;
 }
-.wallet-balance-card > span {
+.wallet-balance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wallet-balance-heading > span {
   color: var(--muted);
   font-size: .58rem;
   font-weight: 800;
   letter-spacing: .1em;
 }
-.wallet-balance-card > strong { color: var(--accent); font-size: 1.65rem; line-height: 1.1; }
+.wallet-balance-card > strong { color: #f3fff8; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .wallet-balance-card > small,
 .wallet-section > small { color: var(--muted); font-size: .58rem; line-height: 1.45; }
 .wallet-status {
-  min-height: 1.2em;
-  margin: 8px 2px;
+  min-height: 0;
+  margin: 7px 2px;
   color: var(--accent);
   font-size: .64rem;
   line-height: 1.4;
 }
 .wallet-status.is-error { color: #ff9a90; }
+.wallet-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 11px 0 13px;
+}
+.wallet-quick-action {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 72px;
+  padding: 9px 5px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255,255,255,.045);
+  font: inherit;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.wallet-quick-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(0,240,168,.35);
+  background: rgba(0,240,168,.08);
+}
+.wallet-quick-action > span {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border-radius: 11px;
+  color: #04120b;
+  background: var(--accent);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.wallet-quick-action > strong { font-size: .64rem; }
+.wallet-quick-action:disabled { opacity: .48; cursor: not-allowed; }
 .wallet-section {
   display: grid;
   gap: 8px;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 14px;
+  margin-top: 11px;
+  padding: 13px;
+  border: 1px solid rgba(255,255,255,.085);
+  border-radius: 15px;
   background: rgba(255,255,255,.035);
 }
+.wallet-action-panel { border-color: rgba(0,240,168,.2); background: rgba(0,240,168,.035); }
 .wallet-section h3 { margin: 0; color: var(--text); font-size: .76rem; }
 .wallet-section p { margin: 0; color: var(--muted); font-size: .62rem; line-height: 1.45; }
 .wallet-section label { color: var(--muted); font-size: .6rem; font-weight: 700; }
@@ -4002,6 +4049,18 @@ h1 {
   background: rgba(0,240,168,.08);
 }
 .wallet-action-btn:disabled { opacity: .58; cursor: wait; }
+.wallet-handle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 11px;
+  background: rgba(0,0,0,.18);
+}
+.wallet-handle-row > strong { overflow-wrap: anywhere; color: var(--accent); font-size: .82rem; }
+.wallet-handle-row .wallet-action-btn { min-height: 34px; padding: 0 10px; white-space: nowrap; }
 .wallet-refresh-btn {
   width: 30px;
   height: 30px;
@@ -4026,8 +4085,152 @@ h1 {
 .wallet-transaction span { color: var(--muted); font-size: .56rem; }
 .wallet-transaction .credit-in { color: var(--accent); }
 .wallet-transaction .credit-out { color: #ffd18a; }
+.wallet-transaction.is-unread {
+  border: 1px solid rgba(0,240,168,.32);
+  background: rgba(0,240,168,.075);
+}
 .wallet-history-section { margin-bottom: 4px; }
 .phone-app-header .wallet-refresh-btn { flex: 0 0 auto; }
+.wallet-activity-note {
+  margin: 10px 12px 6px;
+  color: var(--muted);
+  font-size: .62rem;
+  line-height: 1.45;
+}
+.wallet-activity-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 12px 16px;
+  align-content: start;
+  overscroll-behavior: contain;
+}
+.phone-notes-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #0b130e;
+}
+.phone-notes-content > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .64rem;
+}
+.phone-notes-content textarea {
+  flex: 1;
+  min-height: 180px;
+  resize: none;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  outline: none;
+  color: var(--text);
+  background: rgba(255,255,255,.045);
+  font: 500 .75rem/1.55 system-ui,sans-serif;
+}
+.phone-notes-content textarea:focus { border-color: var(--accent); }
+.phone-notes-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .56rem;
+}
+.phone-inbox-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin: auto;
+  padding: 20px;
+  color: var(--muted);
+  font-size: .68rem;
+  text-align: center;
+}
+.phone-message-inbox {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+  gap: 7px;
+  overflow-y: auto;
+  padding: 10px;
+}
+.phone-message-thread {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  color: var(--text);
+  background: rgba(255,255,255,.04);
+  text-align: left;
+  cursor: pointer;
+}
+.phone-message-thread > strong { color: var(--accent); font-size: .7rem; }
+.phone-message-thread > span { overflow: hidden; color: var(--text); font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
+.phone-message-thread > small { color: var(--muted); font-size: .55rem; }
+.phone-contacts-add {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 7px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.phone-contacts-add label { color: var(--muted); font-size: .6rem; font-weight: 700; }
+.phone-contacts-add > div { display: flex; gap: 7px; }
+.phone-contacts-add input {
+  min-width: 0;
+  flex: 1;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 9px;
+  outline: none;
+  color: var(--text);
+  background: rgba(255,255,255,.05);
+  font: 600 .68rem/1.2 system-ui,sans-serif;
+}
+.phone-contacts-add input:focus { border-color: var(--accent); }
+.phone-contacts-add button {
+  min-width: 54px;
+  border: 0;
+  border-radius: 9px;
+  color: #04120b;
+  background: var(--accent);
+  font: 800 .64rem/1 system-ui,sans-serif;
+}
+.phone-contacts-add button:disabled { opacity: .6; }
+.phone-contacts-add p { min-height: 1em; margin: 0; color: var(--accent); font-size: .58rem; }
+.phone-contacts-add p.is-error { color: #ff9a90; }
+.phone-music-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #050a08;
+}
+.phone-music-now {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 15px 12px;
+  border: 1px solid rgba(0,240,168,.22);
+  border-radius: 15px;
+  background: linear-gradient(140deg, rgba(0,240,168,.12), rgba(255,255,255,.025));
+  text-align: center;
+}
+.phone-music-now > span { color: var(--accent); font-size: .55rem; font-weight: 800; letter-spacing: .12em; }
+.phone-music-now > strong { color: var(--text); font-size: .85rem; }
+.phone-music-now > p { margin: 0; color: var(--muted); font-size: .6rem; line-height: 1.4; }
+.phone-music-now .wallet-action-btn { min-width: 130px; padding: 0 14px; }
+.phone-music-section-title { color: var(--muted); font-size: .58rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.phone-music-stations { display: grid; gap: 7px; }
+.phone-radio-source { color: var(--muted); font-size: .55rem; text-align: center; }
 .phone-weather-locate {
   min-height: 38px;
   padding: 0 14px;

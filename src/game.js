@@ -3155,6 +3155,18 @@ const TUTORIAL_STEPS = [
 
 let tutStep = 0;
 let tutActive = false;
+let tutorialProfileCheckedFor = null;
+let tutorialProfileRefresh = null;
+
+function tutorialSeenOnDevice(username) {
+  const key = username ? 'feltora-tutorial-seen:' + username : 'feltora-tutorial-seen:guest';
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
+function rememberTutorialOnDevice(username) {
+  const key = username ? 'feltora-tutorial-seen:' + username : 'feltora-tutorial-seen:guest';
+  try { localStorage.setItem(key, '1'); } catch {}
+}
 
 function getTutSpotlightEl(key) {
   if (!key) return null;
@@ -3243,10 +3255,34 @@ function getFirstRelevantStep() {
 }
 
 function startTutorial(force = false) {
-  try {
-    // use sessionStorage so it auto-shows once per session, not permanently blocked
-    if (!force && sessionStorage.getItem('feltora-tutorial-seen')) return;
-  } catch {}
+  const auth = window.FeltoraAuth;
+  const username = auth && auth.currentUser();
+  if (!force && tutorialSeenOnDevice(username)) return;
+  if (!force && username) {
+    const account = auth.getAccount(username);
+    if (account && account.tutorialCompleted) {
+      rememberTutorialOnDevice(username);
+      return;
+    }
+    if (tutorialProfileCheckedFor !== username) {
+      if (tutorialProfileRefresh) return;
+      tutorialProfileRefresh = auth.refreshProfile().then((profile) => {
+        tutorialProfileCheckedFor = username;
+        if (profile && profile.tutorialCompleted) {
+          rememberTutorialOnDevice(username);
+          return;
+        }
+        startTutorial(false);
+      }).catch((error) => {
+        tutorialProfileCheckedFor = username;
+        console.error('Tutorial preference could not be loaded:', error);
+        startTutorial(false);
+      }).finally(() => {
+        tutorialProfileRefresh = null;
+      });
+      return;
+    }
+  }
   tutStep = Math.max(0, getFirstRelevantStep());
   tutActive = true;
   const overlay = document.getElementById('tutorial-overlay');
@@ -3257,7 +3293,9 @@ function startTutorial(force = false) {
 function closeTutorial() {
   tutActive = false;
   document.getElementById('tutorial-overlay').classList.remove('active');
-  try { sessionStorage.setItem('feltora-tutorial-seen', '1'); } catch {}
+  const auth = window.FeltoraAuth;
+  rememberTutorialOnDevice(auth && auth.currentUser());
+  if (auth && auth.currentUser()) auth.update({ tutorialCompleted: true });
 }
 
 function tutNext() {

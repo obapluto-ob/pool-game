@@ -7,6 +7,8 @@
   var radioPlaying = false;
   var radioAudio = null;
   var currentStation = null;
+  var walletActivityTimer = null;
+  var walletActivityLoading = false;
   var PAYSTACK_KEY = 'pk_live_843fc3c7f2b2b12acf9de27e102dcb8ab3229136';
   var userCountry = 'KE'; // default Kenya, updated by geo fetch
 
@@ -193,11 +195,10 @@
   }
 
   var KENYA_STATIONS = [
-    { name: 'Capital FM',    url: 'https://stream.zeno.fm/0r0xa792kwzuv', emoji: '🎵' },
-    { name: 'Radio Jambo',   url: 'https://stream.zeno.fm/yn65m7h9p7zuv', emoji: '🎶' },
-    { name: 'Classic 105',   url: 'https://stream.zeno.fm/tsxbm1qp7wzuv', emoji: '🎸' },
-    { name: 'Kiss 100',      url: 'https://stream.zeno.fm/f3b8w8p9p7zuv', emoji: '💋' },
-    { name: 'Homeboyz Radio',url: 'https://stream.zeno.fm/r8b2m3h9p7zuv', emoji: '🏠' }
+    { name: 'Kameme FM', url: 'https://kamemefm-atunwadigital.streamguys1.com/kamemefm', emoji: '🎵' },
+    { name: 'Radio47', url: 'https://streaming.shoutcast.com/radio-47?ver=690109', emoji: '🎶' },
+    { name: 'JESUS IS LORD Radio', url: 'https://s3.radio.co/s97f38db97/listen', emoji: '🎸' },
+    { name: 'NATION FM', url: 'https://stream.radiojar.com/3by7s8eg65quv', emoji: '📻' }
   ];
 
   var ABUSIVE_PATTERNS = [
@@ -300,43 +301,64 @@
   // ── Radio ────────────────────────────────────────────────────────
   function playStation(station) {
     if (radioAudio) { radioAudio.pause(); radioAudio = null; }
+    radioPlaying = false;
     currentStation = station;
     radioAudio = new Audio(station.url);
     radioAudio.volume = 0.6;
+    updateRadioUI('Connecting to ' + station.name + '…');
+    radioAudio.addEventListener('error', function() {
+      radioPlaying = false;
+      updateRadioUI('Could not load this stream. Try another station.');
+    }, { once: true });
     radioAudio.play().then(function() {
-      radioPlaying = true; updateRadioUI();
-    }).catch(function() {
-      radioPlaying = false; updateRadioUI();
-      var s = document.getElementById('radio-status');
-      if (s) s.textContent = 'Stream unavailable — try another';
+      radioPlaying = true;
+      updateRadioUI('Streaming live from ' + station.name + '.');
+    }).catch(function(error) {
+      radioPlaying = false;
+      console.error('Radio stream could not start:', station.name, error);
+      updateRadioUI('Stream unavailable. Check your connection or try another station.');
     });
   }
 
   function stopRadio() {
     if (radioAudio) { radioAudio.pause(); radioAudio = null; }
-    radioPlaying = false; currentStation = null; updateRadioUI();
+    radioPlaying = false; updateRadioUI('Radio stopped. Press play to resume.');
   }
 
-  function updateRadioUI() {
-    var np = document.getElementById('radio-now-playing');
-    var pb = document.getElementById('radio-play-btn');
-    if (np) np.textContent = radioPlaying && currentStation ? currentStation.name : 'Not playing';
-    if (pb) pb.textContent = radioPlaying ? '⏹ Stop' : '▶ Play';
+  function updateRadioUI(statusMessage) {
+    ['radio-now-playing', 'music-now-playing'].forEach(function(id) {
+      var nowPlaying = document.getElementById(id);
+      if (nowPlaying) nowPlaying.textContent = currentStation ? currentStation.name : 'Choose a station';
+    });
+    ['radio-play-btn', 'music-play-btn'].forEach(function(id) {
+      var button = document.getElementById(id);
+      if (button) button.textContent = radioPlaying ? '⏹ Stop' : '▶ Play station';
+    });
+    if (statusMessage) {
+      ['radio-status', 'music-status'].forEach(function(id) {
+        var status = document.getElementById(id);
+        if (status) status.textContent = statusMessage;
+      });
+    }
     document.querySelectorAll('.radio-station-btn').forEach(function(btn) {
       btn.classList.toggle('active', !!(radioPlaying && currentStation && btn.dataset.name === currentStation.name));
     });
   }
 
   function buildRadioList() {
-    var list = document.getElementById('radio-stations-list');
-    if (!list) return;
-    var entitled = window.FeltoraStore && window.FeltoraStore.hasTipTier
-      ? window.FeltoraStore.hasTipTier(currentPhoneProfile()) : false;
-    list.innerHTML = KENYA_STATIONS.map(function(s, index) {
-      var locked = index > 1 && !entitled;
-      return '<button class="radio-station-btn' + (locked ? ' locked' : '') + '" data-name="' + s.name + '" data-url="' + s.url + '" data-locked="' + locked + '">'
-        + s.emoji + ' ' + s.name + (locked ? ' · 🔒' : '') + '</button>';
-    }).join('');
+    ['radio-stations-list', 'music-stations-list'].forEach(function(id) {
+      var list = document.getElementById(id);
+      if (!list) return;
+      list.innerHTML = KENYA_STATIONS.map(function(station) {
+        return '<button class="radio-station-btn" data-name="' + station.name + '" data-url="' + station.url + '">'
+          + station.emoji + ' ' + station.name + '</button>';
+      }).join('');
+    });
+    updateRadioUI();
+  }
+
+  function radioStationFor(name) {
+    return KENYA_STATIONS.find(function(station) { return station.name === name; }) || null;
   }
 
   function currentPhoneProfile() {
@@ -369,8 +391,40 @@
     }
   }
 
-  function getFriends() { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY) || '[]'); } catch(e) { return []; } }
-  function saveFriends(l) { lsSet(FRIENDS_KEY, l); }
+  function getFriends() {
+    var auth = window.FeltoraAuth;
+    var username = auth && auth.currentUser();
+    var profile = username && auth.getAccount(username);
+    if (profile && Array.isArray(profile.friends)) {
+      return profile.friends.filter(function(name) { return typeof name === 'string' && /^[a-z0-9_]{3,18}$/.test(name); });
+    }
+    if (!username) return [];
+    var legacy;
+    try { legacy = JSON.parse(localStorage.getItem(FRIENDS_KEY) || '[]'); } catch(error) { legacy = []; }
+    if (Array.isArray(legacy) && legacy.length) {
+      saveFriends(legacy);
+      try { localStorage.removeItem(FRIENDS_KEY); } catch(error) { console.error('Old contacts could not be migrated:', error); }
+      return legacy.filter(function(name) { return typeof name === 'string' && /^[a-z0-9_]{3,18}$/.test(name); });
+    }
+    try {
+      var saved = JSON.parse(localStorage.getItem(FRIENDS_KEY + ':' + username) || '[]');
+      return Array.isArray(saved) ? saved.filter(function(name) { return typeof name === 'string' && /^[a-z0-9_]{3,18}$/.test(name); }) : [];
+    } catch(error) {
+      console.error('Saved contacts could not be read:', error);
+      return [];
+    }
+  }
+  function saveFriends(list) {
+    var auth = window.FeltoraAuth;
+    var username = auth && auth.currentUser();
+    if (!username) return false;
+    var friends = Array.from(new Set(list.filter(function(name) {
+      return typeof name === 'string' && /^[a-z0-9_]{3,18}$/.test(name);
+    })));
+    var saved = lsSet(FRIENDS_KEY + ':' + username, friends);
+    if (auth.update) auth.update({ friends: friends });
+    return saved;
+  }
 
   function getMessages(fid) {
     try { var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'); return a[fid] || []; } catch(e) { return []; }
@@ -462,12 +516,12 @@
 
   function addFriend(username) {
     var me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
-    if (!me || !username || username === me) return false;
+    username = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    if (!me || !/^[a-z0-9_]{3,18}$/.test(username) || username === me) return false;
     var friends = getFriends();
     if (friends.indexOf(username) !== -1) return false;
     friends.push(username);
-    saveFriends(friends);
-    return true;
+    return saveFriends(friends);
   }
 
   // ── FeltoraChat rooms ────────────────────────────────────────────
@@ -700,6 +754,93 @@
         + '<button class="phone-action-btn phone-msg-btn" data-friend="' + f + '" title="Message">&#x1F4AC;</button>'
         + '</div>' + unreadBadge + '</div>';
     }).join('');
+  }
+
+  function setContactStatus(message, isError) {
+    var status = document.getElementById('phone-contact-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.toggle('is-error', !!isError);
+  }
+
+  function findAndAddContact() {
+    var input = document.getElementById('phone-contact-search');
+    var button = document.getElementById('phone-contact-add');
+    var username = input ? input.value.trim().toLowerCase() : '';
+    if (!window.FeltoraAuth || !window.FeltoraAuth.currentUser()) {
+      setContactStatus('Sign in to find and save player contacts.', true);
+      return;
+    }
+    if (!/^[a-z0-9_]{3,18}$/.test(username)) {
+      setContactStatus('Enter a username with 3–18 letters, numbers, or underscores.', true);
+      if (input) input.focus();
+      return;
+    }
+    if (!window.FeltoraStore || !window.FeltoraStore.lookupPlayer) {
+      setContactStatus('Player search is unavailable. Please reload and try again.', true);
+      return;
+    }
+    if (button) button.disabled = true;
+    setContactStatus('Searching FELTORA players…');
+    window.FeltoraStore.lookupPlayer(username).then(function(foundUsername) {
+      if (!addFriend(foundUsername)) {
+        setContactStatus('That player is already in your contacts.');
+        return;
+      }
+      if (input) input.value = '';
+      setContactStatus('@' + foundUsername + ' added to your contacts.');
+      renderContacts();
+    }).catch(function(error) {
+      setContactStatus(error.message || 'Player could not be found. Try again.', true);
+    }).finally(function() {
+      if (button) button.disabled = false;
+    });
+  }
+
+  function renderMessageInbox() {
+    var list = document.getElementById('phone-message-inbox');
+    if (!list) return;
+    var friends = getFriends();
+    var threads = friends.map(function(friend) {
+      var messages = getMessages(friend);
+      return { friend: friend, message: messages.length ? messages[messages.length - 1] : null };
+    }).sort(function(a, b) {
+      return Number(b.message && b.message.ts || 0) - Number(a.message && a.message.ts || 0);
+    });
+    list.replaceChildren();
+    if (!threads.length) {
+      var empty = document.createElement('div');
+      empty.className = 'phone-inbox-empty';
+      var text = document.createElement('p');
+      text.textContent = 'Your conversations with FELTORA players will appear here.';
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.dataset.phoneNav = 'contacts';
+      add.className = 'wallet-action-btn secondary';
+      add.textContent = 'Find a player';
+      empty.appendChild(text);
+      empty.appendChild(add);
+      list.appendChild(empty);
+      return;
+    }
+    threads.forEach(function(thread) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'phone-message-thread';
+      button.dataset.friend = thread.friend;
+      var title = document.createElement('strong');
+      title.textContent = '@' + thread.friend;
+      var preview = document.createElement('span');
+      preview.textContent = thread.message
+        ? (thread.message.voice ? 'Voice message' : thread.message.text || 'Message')
+        : 'Start a conversation';
+      var time = document.createElement('small');
+      time.textContent = thread.message ? new Date(thread.message.ts).toLocaleString() : 'FELTORA contact';
+      button.appendChild(title);
+      button.appendChild(preview);
+      button.appendChild(time);
+      list.appendChild(button);
+    });
   }
 
   // typing indicator state per friend
@@ -1246,9 +1387,11 @@
       v.classList.toggle('active', v.id === 'phone-' + id);
     });
     if (id === 'gallery') renderPhoneGallery();
+    if (id === 'messages') renderMessageInbox();
+    if (id === 'notes') loadPhoneNotes();
     if (id === 'store' && window.FeltoraStore) window.FeltoraStore.render();
     if (id === 'orion') updateOrionLimit();
-    if (id === 'radio') buildRadioList();
+    if (id === 'radio' || id === 'music') buildRadioList();
     if (id === 'store' && window.FeltoraStore && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
       window.FeltoraStore.refreshWallet().catch(function(error) {
         if (window.FeltoraPhone && window.FeltoraPhone.notify) window.FeltoraPhone.notify(error.message);
@@ -1259,6 +1402,17 @@
         console.error('Wallet could not be refreshed:', error);
       });
       verifyWalletReturn();
+    }
+    if (id === 'activity') {
+      markWalletActivityRead();
+      var store = window.FeltoraStore;
+      if (store && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
+        store.refreshWallet().catch(function(error) {
+          console.error('Wallet activity could not be refreshed:', error);
+        });
+      } else {
+        renderWalletActivity(null);
+      }
     }
   }
 
@@ -1308,11 +1462,153 @@
     status.classList.toggle('is-error', !!isError);
   }
 
+  var WALLET_ALERTS_KEY = 'feltora-wallet-alerts';
+
+  function walletAlertsKey() {
+    var auth = window.FeltoraAuth;
+    return WALLET_ALERTS_KEY + ':' + (auth && (auth.uid() || auth.currentUser()) || 'guest');
+  }
+
+  function readWalletAlertState() {
+    try {
+      var state = JSON.parse(localStorage.getItem(walletAlertsKey()) || 'null');
+      return state && Array.isArray(state.seenRefs) && Array.isArray(state.unreadRefs)
+        ? state : { initialized: false, seenRefs: [], unreadRefs: [] };
+    } catch (error) {
+      console.error('Wallet notification state could not be read:', error);
+      return { initialized: false, seenRefs: [], unreadRefs: [] };
+    }
+  }
+
+  function saveWalletAlertState(state) {
+    try {
+      localStorage.setItem(walletAlertsKey(), JSON.stringify(state));
+    } catch (error) {
+      console.error('Wallet notifications could not be saved on this device:', error);
+    }
+  }
+
+  function walletTransactionMessage(transaction) {
+    if (transaction.type === 'transfer_in') {
+      return 'You received ' + Number(transaction.amount || 0).toLocaleString()
+        + ' credits from @' + String(transaction.fromUsername || 'player') + '.';
+    }
+    if (transaction.type === 'transfer_out') {
+      return 'You sent ' + Number(transaction.amount || 0).toLocaleString()
+        + ' credits to @' + String(transaction.toUsername || 'player') + '.';
+    }
+    if (transaction.type === 'store_purchase') {
+      return 'You purchased ' + String(transaction.itemName || transaction.itemId || 'a store item') + ' with wallet credits.';
+    }
+    if (transaction.type === 'top_up') {
+      return 'Your KSh ' + Number(transaction.amountKes || 0).toLocaleString() + ' wallet top-up was credited.';
+    }
+    return 'Your FELTORA wallet has new activity.';
+  }
+
+  function updateWalletActivityBadge(count) {
+    document.querySelectorAll('[data-open="activity"]').forEach(function(icon) {
+      var badge = icon.querySelector('.app-badge');
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'app-badge';
+          icon.appendChild(badge);
+        }
+        badge.textContent = count > 9 ? '9+' : String(count);
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+  }
+
+  function renderWalletActivity(data) {
+    var state = readWalletAlertState();
+    var entries = data && Array.isArray(data.transactions) ? data.transactions : [];
+    var list = document.getElementById('wallet-activity-list');
+    updateWalletActivityBadge(state.unreadRefs.length);
+    if (!list) return;
+    list.textContent = '';
+    if (!entries.length) {
+      var empty = document.createElement('p');
+      empty.textContent = window.FeltoraAuth && window.FeltoraAuth.currentUser()
+        ? 'No wallet activity yet. Top-ups, purchases, and transfers will appear here.'
+        : 'Sign in to see wallet activity and transfer notifications.';
+      list.appendChild(empty);
+      return;
+    }
+    entries.forEach(function(transaction) {
+      var row = document.createElement('div');
+      row.className = 'wallet-transaction';
+      if (state.unreadRefs.indexOf(transaction.reference) !== -1) row.classList.add('is-unread');
+      var description = document.createElement('strong');
+      var amount = document.createElement('strong');
+      var date = document.createElement('span');
+      var type = transaction.type;
+      if (type === 'top_up') description.textContent = 'Wallet top-up · KSh ' + Number(transaction.amountKes || 0).toLocaleString();
+      else if (type === 'store_purchase') description.textContent = 'Store purchase · ' + String(transaction.itemName || transaction.itemId || 'Item');
+      else if (type === 'transfer_out') description.textContent = 'Sent to @' + String(transaction.toUsername || 'player');
+      else if (type === 'transfer_in') description.textContent = 'Received from @' + String(transaction.fromUsername || 'player');
+      else description.textContent = 'Wallet activity';
+      amount.className = transaction.direction === 'in' ? 'credit-in' : 'credit-out';
+      amount.textContent = (transaction.direction === 'in' ? '+' : '−')
+        + Number(transaction.amount || 0).toLocaleString() + ' credits';
+      date.textContent = transaction.status === 'pending'
+        ? 'Processing transfer…'
+        : new Date(Number(transaction.createdAt) || Date.now()).toLocaleString();
+      row.appendChild(description);
+      row.appendChild(amount);
+      row.appendChild(date);
+      list.appendChild(row);
+    });
+  }
+
+  function handleWalletUpdate(data) {
+    var entries = data && Array.isArray(data.transactions) ? data.transactions : [];
+    var state = readWalletAlertState();
+    var currentRefs = entries.map(function(transaction) { return transaction.reference; })
+      .filter(function(reference) { return typeof reference === 'string' && reference; });
+    if (!state.initialized) {
+      state.initialized = true;
+      state.seenRefs = currentRefs;
+      state.unreadRefs = [];
+      saveWalletAlertState(state);
+      updateWalletActivityBadge(0);
+      renderWalletActivity(data);
+      return;
+    }
+    var seen = new Set(state.seenRefs);
+    var fresh = entries.filter(function(transaction) {
+      return typeof transaction.reference === 'string' && transaction.reference && !seen.has(transaction.reference);
+    });
+    fresh.forEach(function(transaction) {
+      seen.add(transaction.reference);
+      state.unreadRefs.push(transaction.reference);
+    });
+    state.seenRefs = Array.from(seen).slice(-200);
+    state.unreadRefs = Array.from(new Set(state.unreadRefs)).slice(-100);
+    saveWalletAlertState(state);
+    updateWalletActivityBadge(state.unreadRefs.length);
+    renderWalletActivity(data);
+    fresh.forEach(function(transaction) { showToast(walletTransactionMessage(transaction)); });
+  }
+
+  function markWalletActivityRead() {
+    var state = readWalletAlertState();
+    state.unreadRefs = [];
+    saveWalletAlertState(state);
+    updateWalletActivityBadge(0);
+  }
+
   function renderWallet(data) {
     var balance = document.getElementById('wallet-balance');
     var list = document.getElementById('wallet-transactions');
     if (balance) balance.textContent = Number(data.balance || 0).toLocaleString();
-    if (!list) return;
+    if (list) renderWalletTransactionList(data, list);
+    renderWalletActivity(data);
+  }
+
+  function renderWalletTransactionList(data, list) {
     list.textContent = '';
     var entries = Array.isArray(data.transactions) ? data.transactions : [];
     if (!entries.length) {
@@ -1347,13 +1643,73 @@
   }
 
   function updateWalletButtons() {
-    var signedIn = !!(window.FeltoraAuth && window.FeltoraAuth.currentUser());
+    var username = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+    var signedIn = !!username;
     var signIn = document.getElementById('wallet-signin');
     var topUp = document.getElementById('wallet-topup');
     var send = document.getElementById('wallet-send');
+    var copyHandle = document.getElementById('wallet-copy-handle');
+    var handle = document.getElementById('wallet-handle');
     if (signIn) signIn.hidden = signedIn;
     if (topUp) topUp.disabled = walletBusy || !signedIn;
     if (send) send.disabled = walletBusy || !signedIn;
+    ['wallet-open-topup', 'wallet-open-send', 'wallet-open-receive'].forEach(function(id) {
+      var button = document.getElementById(id);
+      if (button) button.disabled = !signedIn;
+    });
+    if (copyHandle) copyHandle.disabled = !signedIn;
+    if (handle) handle.textContent = username ? '@' + username : 'Sign in to get your username';
+    if (!signedIn) {
+      ['wallet-topup-panel', 'wallet-send-panel', 'wallet-receive-panel'].forEach(function(id) {
+        var panel = document.getElementById(id);
+        if (panel) panel.hidden = true;
+      });
+    }
+  }
+
+  function showWalletPanel(panelName) {
+    ['topup', 'send', 'receive'].forEach(function(name) {
+      var panel = document.getElementById('wallet-' + name + '-panel');
+      if (panel) panel.hidden = name !== panelName;
+    });
+    var panel = document.getElementById('wallet-' + panelName + '-panel');
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      var input = panel.querySelector('input');
+      if (input) input.focus({ preventScroll: true });
+    }
+  }
+
+  function copyWalletHandle() {
+    var username = window.FeltoraAuth && window.FeltoraAuth.currentUser();
+    if (!username) return;
+    var text = '@' + username;
+    var copy;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      copy = navigator.clipboard.writeText(username);
+    } else {
+      var input = document.createElement('textarea');
+      input.value = username;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      try {
+        document.body.appendChild(input);
+        input.select();
+        if (!document.execCommand('copy')) throw new Error('Clipboard access is unavailable.');
+        copy = Promise.resolve();
+      } catch (error) {
+        copy = Promise.reject(error);
+      } finally {
+        input.remove();
+      }
+    }
+    copy.then(function() {
+      showToast('Wallet username copied: ' + text);
+    }).catch(function(error) {
+      console.error('Wallet username could not be copied:', error);
+      showToast('Could not copy automatically. Share your username: ' + text);
+    });
   }
 
   function refreshPhoneWallet() {
@@ -1513,8 +1869,24 @@
     var send = document.getElementById('wallet-send');
     var refresh = document.getElementById('wallet-refresh');
     var signIn = document.getElementById('wallet-signin');
+    var openTopUp = document.getElementById('wallet-open-topup');
+    var openSend = document.getElementById('wallet-open-send');
+    var openReceive = document.getElementById('wallet-open-receive');
+    var copyHandle = document.getElementById('wallet-copy-handle');
+    var activityRefresh = document.getElementById('activity-refresh');
     if (topUp) topUp.addEventListener('click', walletTopUp);
     if (send) send.addEventListener('click', sendWalletCredits);
+    if (openTopUp) openTopUp.addEventListener('click', function() { showWalletPanel('topup'); });
+    if (openSend) openSend.addEventListener('click', function() { showWalletPanel('send'); });
+    if (openReceive) openReceive.addEventListener('click', function() { showWalletPanel('receive'); });
+    if (copyHandle) copyHandle.addEventListener('click', copyWalletHandle);
+    if (activityRefresh) activityRefresh.addEventListener('click', function() {
+      var store = window.FeltoraStore;
+      if (!store) return;
+      store.refreshWallet().catch(function(error) {
+        console.error('Wallet activity could not be refreshed:', error);
+      });
+    });
     if (refresh) refresh.addEventListener('click', function() {
       if (new URLSearchParams(window.location.search).get('wallet') === 'return') {
         verifyWalletReturn();
@@ -1530,6 +1902,29 @@
     });
     restoreWalletTransferRequest();
     updateWalletButtons();
+  }
+
+  function pollWalletActivity() {
+    var auth = window.FeltoraAuth;
+    var store = window.FeltoraStore;
+    if (walletActivityLoading || document.hidden || !auth || !auth.currentUser()
+        || !store || !store.refreshWallet) return;
+    walletActivityLoading = true;
+    store.refreshWallet().catch(function(error) {
+      if (error.status !== 401) console.error('Wallet notifications could not be refreshed:', error);
+    }).finally(function() {
+      walletActivityLoading = false;
+    });
+  }
+
+  function startWalletActivityMonitor() {
+    if (walletActivityTimer) window.clearInterval(walletActivityTimer);
+    walletActivityTimer = window.setInterval(pollWalletActivity, 30000);
+    window.addEventListener('focus', pollWalletActivity);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) pollWalletActivity();
+    });
+    pollWalletActivity();
   }
 
   // -- Floating FAB
@@ -1852,6 +2247,58 @@
     buildWallpaperPicker();
   }
 
+  var PHONE_NOTES_KEY = 'feltora-phone-notes';
+
+  function phoneNotesKey() {
+    var auth = window.FeltoraAuth;
+    return PHONE_NOTES_KEY + ':' + (auth && (auth.uid() || auth.currentUser()) || 'guest');
+  }
+
+  function updatePhoneNotesCount(value) {
+    var counter = document.getElementById('phone-notes-count');
+    if (counter) counter.textContent = value.length + ' / 5000';
+  }
+
+  function savePhoneNotes() {
+    var input = document.getElementById('phone-notes-input');
+    var status = document.getElementById('phone-notes-status');
+    if (!input) return;
+    try {
+      localStorage.setItem(phoneNotesKey(), input.value);
+      if (status) status.textContent = 'Saved on this device';
+    } catch (error) {
+      console.error('Phone notes could not be saved:', error);
+      if (status) status.textContent = 'Could not save. Device storage may be full.';
+    }
+    updatePhoneNotesCount(input.value);
+  }
+
+  function loadPhoneNotes() {
+    var input = document.getElementById('phone-notes-input');
+    if (!input) return;
+    try {
+      input.value = localStorage.getItem(phoneNotesKey()) || '';
+    } catch (error) {
+      console.error('Phone notes could not be loaded:', error);
+      input.value = '';
+      var status = document.getElementById('phone-notes-status');
+      if (status) status.textContent = 'Could not load notes from this device.';
+    }
+    updatePhoneNotesCount(input.value);
+  }
+
+  function initPhoneNotes() {
+    var input = document.getElementById('phone-notes-input');
+    var clear = document.getElementById('phone-notes-clear');
+    if (input) input.addEventListener('input', savePhoneNotes);
+    if (clear) clear.addEventListener('click', function() {
+      if (!window.confirm('Clear your saved notes on this device?')) return;
+      if (input) input.value = '';
+      savePhoneNotes();
+    });
+    loadPhoneNotes();
+  }
+
   // -- Play button inside phone
   function initPhonePlayBtn() {
     var playBtn = document.getElementById('phone-play-btn');
@@ -1870,7 +2317,23 @@
     var phoneApp = document.getElementById('phone-app');
     if (!phoneApp) return;
     initWalletApp();
+    initPhoneNotes();
     verifyWalletReturn();
+    window.addEventListener('feltora:wallet-updated', function(event) {
+      handleWalletUpdate(event.detail);
+      renderWallet(event.detail);
+    });
+    startWalletActivityMonitor();
+
+    var contactAdd = document.getElementById('phone-contact-add');
+    var contactSearch = document.getElementById('phone-contact-search');
+    if (contactAdd) contactAdd.addEventListener('click', findAndAddContact);
+    if (contactSearch) contactSearch.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        findAndAddContact();
+      }
+    });
 
     // typing indicator on DM input
     var chatInput = document.getElementById('phone-chat-input');
@@ -1889,14 +2352,16 @@
 
     phoneApp.addEventListener('click', function(e) {
       var icon = e.target.closest('[data-open]');
+      var phoneNav = e.target.closest('[data-phone-nav]');
       var back = e.target.closest('[data-back]');
       var tab  = e.target.closest('.pft-tab');
       var callBtn     = e.target.closest('.phone-call-btn');
       var msgBtn      = e.target.closest('.phone-msg-btn');
       var voiceBtn    = e.target.closest('.phone-voice-btn');
       var stationBtn  = e.target.closest('.radio-station-btn');
-      var radioBtn    = e.target.closest('#radio-play-btn');
+      var radioBtn    = e.target.closest('#radio-play-btn, #music-play-btn');
       var sendBtn     = e.target.closest('#phone-chat-send');
+      var messageThread = e.target.closest('.phone-message-thread');
       var chatBack    = e.target.closest('#phone-chat-back');
       var fchatRoomRow= e.target.closest('.fchat-room-row');
       var fchatBack   = e.target.closest('#fchat-room-back');
@@ -1913,6 +2378,7 @@
         var app = icon.dataset.open;
         if (app === 'feltora') { phoneRenderFeed(); phoneUpdateProfile(); }
         if (app === 'contacts') renderContacts();
+        if (app === 'messages') renderMessageInbox();
         if (app === 'feltorachat') renderFChatRooms();
         if (app === 'orion') initOrion();
         if (app === 'settings') { phoneUpdateProfile(); initPhoneSettings(); }
@@ -1920,7 +2386,12 @@
         phoneShowView(app);
         if (app === 'camera') void startPhoneCamera();
       }
+      if (phoneNav) phoneShowView(phoneNav.dataset.phoneNav);
       if (back) phoneShowView(back.dataset.back);
+      if (messageThread) {
+        phoneShowView('contacts');
+        renderChat(messageThread.dataset.friend);
+      }
       if (cameraStart) void startPhoneCamera();
       if (cameraCapture) capturePhonePhoto();
       if (weatherLocate) fetchLocalWeather();
@@ -1950,7 +2421,9 @@
         if (stationBtn.dataset.locked === 'true') {
           showToast('Tip KES 50+ to unlock all radio stations.');
           if (window.FeltoraStore) window.FeltoraStore.openTip(1);
-        } else playStation({ name: stationBtn.dataset.name, url: stationBtn.dataset.url });
+        } else playStation(radioStationFor(stationBtn.dataset.name) || {
+          name: stationBtn.dataset.name, url: stationBtn.dataset.url
+        });
       }
       if (radioBtn) { if (radioPlaying) stopRadio(); else if (currentStation) playStation(currentStation); }
       if (chatBack) {

@@ -502,6 +502,13 @@ module.exports = async function handler(req, res) {
     }
 
     const identity = await getIdentity(req, auth, database);
+    if (body.action === 'lookup-player') {
+      const player = await resolveRecipient(database, body.username);
+      if (player.uid === identity.uid) {
+        throw httpError(400, 'You are already in your contacts.');
+      }
+      return res.status(200).json({ username: player.username });
+    }
     if (body.action === 'initialize-top-up') {
       return res.status(200).json(await initializeTopUp(req, database, identity, body));
     }

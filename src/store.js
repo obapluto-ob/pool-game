@@ -135,6 +135,7 @@
       uid: window.FeltoraAuth && window.FeltoraAuth.uid()
     };
     render();
+    window.dispatchEvent(new CustomEvent('feltora:wallet-updated', { detail: walletState }));
     return walletState;
   }
 
@@ -172,6 +173,14 @@
       throw new Error('Sign in to see your FELTORA wallet.');
     }
     return walletAction('get');
+  }
+
+  async function lookupPlayer(username) {
+    var result = await walletAction('lookup-player', { username: username });
+    if (!result || typeof result.username !== 'string') {
+      throw new Error('The player lookup returned an invalid response.');
+    }
+    return result.username;
   }
 
   function newRequestId() {
@@ -475,6 +484,7 @@
     openTip: openTip,
     walletAction: walletAction,
     refreshWallet: refreshWallet,
+    lookupPlayer: lookupPlayer,
     getWallet: currentWallet,
     buyWithWallet: buyWithWallet,
     tipAmountForTier: tipAmountForTier,

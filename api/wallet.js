@@ -507,7 +507,7 @@ module.exports = async function handler(req, res) {
       if (player.uid === identity.uid) {
         throw httpError(400, 'You are already in your contacts.');
       }
-      return res.status(200).json({ username: player.username });
+      return res.status(200).json({ username: player.username, uid: player.uid });
     }
     if (body.action === 'initialize-top-up') {
       return res.status(200).json(await initializeTopUp(req, database, identity, body));

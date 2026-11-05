@@ -1,5 +1,5 @@
 // FELTORA Service Worker — network-first everywhere, instant updates
-const CACHE = 'feltora-v6';
+const CACHE = 'feltora-v10';
 const PRECACHE = [
   '/index.html',
   '/css/styles.css',

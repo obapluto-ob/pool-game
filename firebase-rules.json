@@ -9,9 +9,23 @@
       ".write": true
     },
     "messages": {
+      ".read": false,
+      ".write": false,
       "$roomId": {
-        ".read": true,
-        ".write": true
+        ".read": "auth != null && ($roomId.beginsWith(auth.uid + '_') || $roomId.endsWith('_' + auth.uid))",
+        ".write": "auth != null && ($roomId.beginsWith(auth.uid + '_') || $roomId.endsWith('_' + auth.uid))",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['fromUid', 'from', 'ts']) && newData.child('fromUid').val() === auth.uid && newData.child('from').val() === root.child('profiles').child(auth.uid).child('username').val() && newData.child('ts').isNumber() && ((newData.child('text').isString() && newData.child('text').val().length <= 500) || (newData.child('voice').isString() && newData.child('voice').val().length <= 700000))"
+        }
+      }
+    },
+    "messageIndex": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$peerUid": {
+          ".write": "auth != null && (auth.uid === $uid || auth.uid === $peerUid)",
+          ".validate": "newData.hasChildren(['peerUid', 'peerUsername', 'updatedAt']) && newData.child('peerUid').val() === $peerUid && newData.child('peerUsername').val() === root.child('profiles').child($peerUid).child('username').val() && newData.child('updatedAt').isNumber()"
+        }
       }
     },
     "fchat": {
@@ -60,6 +74,15 @@
             ".write": "auth != null && auth.uid === $uid && auth.uid !== $followedUid",
             ".validate": "newData.val() === true"
           }
+        }
+      }
+    },
+    "notifications": {
+      "$recipientUid": {
+        ".read": "auth != null && auth.uid === $recipientUid",
+        "$notificationId": {
+          ".write": "auth != null && auth.uid === newData.child('actorUid').val() && auth.uid !== $recipientUid && newData.child('recipientUid').val() === $recipientUid && root.child('community/posts').child(newData.child('postId').val()).child('authorUid').val() === $recipientUid && root.child('community/likes').child(newData.child('postId').val()).child(auth.uid).val() === true && $notificationId === newData.child('postId').val() + '_' + auth.uid",
+          ".validate": "newData.hasChildren(['type', 'postId', 'actorUid', 'actorUsername', 'recipientUid', 'ts']) && newData.child('type').val() === 'community_like' && newData.child('actorUid').val() === auth.uid && newData.child('actorUsername').val() === root.child('profiles').child(auth.uid).child('username').val() && newData.child('recipientUid').val() === $recipientUid && newData.child('postId').isString() && newData.child('ts').isNumber()"
         }
       }
     },

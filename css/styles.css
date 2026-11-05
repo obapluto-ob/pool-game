@@ -3313,6 +3313,7 @@ h1 {
 .feed-card-footer {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .feed-like-btn {
@@ -4177,6 +4178,12 @@ h1 {
   font-size: .62rem;
   line-height: 1.45;
 }
+.community-notifications-heading {
+  margin: 8px 12px 4px;
+  color: var(--text);
+  font-size: .7rem;
+}
+.community-notification { flex: 0 0 auto; }
 .wallet-activity-list {
   flex: 1;
   min-height: 0;
@@ -4676,7 +4683,8 @@ h1 {
   font-weight: 800;
   cursor: pointer;
 }
-.feed-challenge-btn {
+.feed-challenge-btn,
+.feed-message-btn {
   padding: 6px 10px;
   border: 1px solid rgba(0,240,168,.22);
   border-radius: 999px;
@@ -4685,6 +4693,8 @@ h1 {
   font-size: .62rem;
   cursor: pointer;
 }
+.feed-message-btn:hover,
+.feed-challenge-btn:hover { background: rgba(0,240,168,.12); }
 .community-rank-badge {
   display: inline-block;
   margin-left: 4px;

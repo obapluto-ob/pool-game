@@ -203,6 +203,9 @@ function communityRenderFeed() {
     const challengeBtn = me && uid && post.authorUid && post.authorUid !== uid
       ? '<button class="feed-challenge-btn" data-challenge-author="' + escapeHtml(post.author || '') + '">Challenge</button>'
       : '';
+    const messageBtn = post.authorUid && post.authorUid !== uid && /^[a-z0-9_]{3,18}$/.test(post.author || '')
+      ? '<button class="feed-message-btn" data-message-author="' + escapeHtml(post.author || '') + '">Message</button>'
+      : '';
 
     return '<article class="feed-card" data-id="' + escapeHtml(post.id) + '">'
       + '<div class="feed-card-top">'
@@ -217,6 +220,7 @@ function communityRenderFeed() {
       + '<p class="feed-body">' + escapeHtml(post.body || '') + '</p>'
       + '<div class="feed-card-footer">'
       + followBtn
+      + messageBtn
       + challengeBtn
       + '<button class="feed-like-btn' + (liked ? ' liked' : '') + '" data-id="' + escapeHtml(post.id) + '" title="' + (me ? 'Like post' : 'Sign in to like') + '" aria-label="' + (me ? (liked ? 'Unlike post' : 'Like post') : 'Sign in to like') + '" aria-pressed="' + liked + '">'
       + heart + ' <span>' + Object.keys(likes).length + '</span>'
@@ -416,20 +420,42 @@ communityFeed.addEventListener('click', async function(event) {
   const likeBtn = event.target.closest('.feed-like-btn');
   const delBtn = event.target.closest('.feed-delete');
   const followBtn = event.target.closest('.feed-follow-btn');
+  const messageBtn = event.target.closest('.feed-message-btn');
   const challengeBtn = event.target.closest('.feed-challenge-btn');
   const tournamentJoin = event.target.closest('#tournament-join');
-  if (!likeBtn && !delBtn && !followBtn && !challengeBtn && !tournamentJoin) return;
+  if (!likeBtn && !delBtn && !followBtn && !messageBtn && !challengeBtn && !tournamentJoin) return;
 
-  if (!communityRequireAccount(challengeBtn ? 'challenge another player' : tournamentJoin ? 'join the tournament' : 'interact with the community')) return;
+  if (!communityRequireAccount(messageBtn ? 'message another player' : challengeBtn ? 'challenge another player' : tournamentJoin ? 'join the tournament' : 'interact with the community')) return;
   const uid = window.FeltoraAuth.uid();
   const firebase = window.FeltoraFirebase;
+  let actionNotice = '';
   try {
     if (likeBtn) {
       const postId = likeBtn.dataset.id;
       const liked = !!(communityLikes[postId] && communityLikes[postId][uid]);
       const path = '/community/likes/' + encodeURIComponent(postId) + '/' + encodeURIComponent(uid);
       if (liked) await firebase.delete(path);
-      else await firebase.set(path, true);
+      else {
+        await firebase.set(path, true);
+        const post = communityPosts.find(function(entry) { return entry.id === postId; });
+        if (post && post.authorUid && post.authorUid !== uid) {
+          const notificationId = postId + '_' + uid;
+          try {
+            await firebase.set('/notifications/' + encodeURIComponent(post.authorUid) + '/'
+              + encodeURIComponent(notificationId), {
+                type: 'community_like',
+                postId: postId,
+                actorUid: uid,
+                actorUsername: window.FeltoraAuth.currentUser(),
+                recipientUid: post.authorUid,
+                ts: Date.now()
+              });
+          } catch (error) {
+            console.error('Like was saved, but its notification could not be delivered:', error);
+            actionNotice = 'Your like was saved, but the notification could not be delivered.';
+          }
+        }
+      }
     } else if (delBtn) {
       await firebase.delete('/community/posts/' + encodeURIComponent(delBtn.dataset.id));
     } else if (followBtn) {
@@ -442,6 +468,12 @@ communityFeed.addEventListener('click', async function(event) {
         await firebase.set(path, true);
         if (window.FeltoraPhone) window.FeltoraPhone.addFriend(followBtn.dataset.author);
       }
+    } else if (messageBtn) {
+      if (!window.FeltoraPhone || typeof window.FeltoraPhone.openChat !== 'function'
+          || !window.FeltoraPhone.openChat(messageBtn.dataset.messageAuthor)) {
+        communityShowStatus('Private chat could not be opened. Please try again.');
+      }
+      return;
     } else if (challengeBtn) {
       const username = challengeBtn.dataset.challengeAuthor;
       if (!username || username === window.FeltoraAuth.currentUser()) return;
@@ -467,7 +499,7 @@ communityFeed.addEventListener('click', async function(event) {
     }
     if (!challengeBtn && !tournamentJoin) {
       await communityRefresh();
-      communityShowStatus('');
+      communityShowStatus(actionNotice);
     }
   } catch (error) {
     console.error('Community action failed:', error);
@@ -482,6 +514,15 @@ document.getElementById('community-auth-signin').addEventListener('click', funct
 
 document.getElementById('community-auth-dismiss').addEventListener('click', function() {
   document.getElementById('community-auth-nudge').hidden = true;
+});
+
+document.getElementById('community-private-messages').addEventListener('click', function() {
+  if (!communityRequireAccount('open private messages')) return;
+  if (!window.FeltoraPhone || typeof window.FeltoraPhone.openApp !== 'function') {
+    communityShowStatus('Private messages are unavailable. Reload and try again.');
+    return;
+  }
+  window.FeltoraPhone.openApp('messages');
 });
 
 document.querySelectorAll('.community-tab').forEach(function(btn) {

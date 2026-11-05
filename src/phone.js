@@ -9,6 +9,8 @@
   var currentStation = null;
   var walletActivityTimer = null;
   var walletActivityLoading = false;
+  var communityNotificationLoading = false;
+  var communityNotificationPromise = null;
   var PAYSTACK_KEY = 'pk_live_843fc3c7f2b2b12acf9de27e102dcb8ab3229136';
   var userCountry = 'KE'; // default Kenya, updated by geo fetch
 
@@ -427,16 +429,21 @@
   }
 
   function getMessages(fid) {
-    try { var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'); return a[fid] || []; } catch(e) { return []; }
+    try { var a = JSON.parse(localStorage.getItem(MESSAGES_KEY + ':' + messageAccountKey()) || '{}'); return a[fid] || []; } catch(e) { return []; }
+  }
+  function messageAccountKey() {
+    var auth = window.FeltoraAuth;
+    return auth && (auth.uid() || auth.currentUser()) || 'guest';
   }
   function saveMessage(fid, msg) {
     try {
-      var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+      var key = MESSAGES_KEY + ':' + messageAccountKey();
+      var a = JSON.parse(localStorage.getItem(key) || '{}');
       if (!a[fid]) a[fid] = [];
       a[fid].push(msg);
       // cap at MSG_CAP per conversation
       if (a[fid].length > MSG_CAP) a[fid] = a[fid].slice(-MSG_CAP);
-      lsSet(MESSAGES_KEY, a);
+      lsSet(key, a);
     } catch(e) {}
   }
 
@@ -528,8 +535,37 @@
   function getFChatRooms() { try { return JSON.parse(localStorage.getItem(FCHAT_KEY) || '[]'); } catch(e) { return []; } }
   function saveFChatRooms(r) { try { localStorage.setItem(FCHAT_KEY, JSON.stringify(r)); } catch(e) {} }
 
+  function normalizeFChatMessage(message) {
+    if (!message || typeof message !== 'object') return null;
+    var from = typeof message.from === 'string' ? message.from.trim() : '';
+    var text = typeof message.text === 'string' ? message.text : '';
+    var voice = typeof message.voice === 'string' && /^data:audio\/[a-z0-9.+-]+;base64,/i.test(message.voice)
+      ? message.voice : '';
+    var timestamp = Number(message.ts);
+    if (!from || !Number.isFinite(timestamp) || timestamp <= 0 || (!text.trim() && !voice)) return null;
+    return { from: from.slice(0, 40), text: text.slice(0, 500), voice: voice, ts: timestamp };
+  }
+
+  function normalizeFChatMessages(messages) {
+    return (Array.isArray(messages) ? messages : []).map(normalizeFChatMessage).filter(Boolean);
+  }
+
+  function escapePhoneHtml(value) {
+    return String(value).replace(/[&<>"']/g, function(character) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
+    });
+  }
+
   function getFChatMessages(roomId) {
-    try { var a = JSON.parse(localStorage.getItem(FCHAT_KEY + '-msgs') || '{}'); return a[roomId] || []; } catch(e) { return []; }
+    try {
+      var a = JSON.parse(localStorage.getItem(FCHAT_KEY + '-msgs') || '{}');
+      var messages = normalizeFChatMessages(a[roomId]);
+      if (Array.isArray(a[roomId]) && messages.length !== a[roomId].length) {
+        a[roomId] = messages;
+        localStorage.setItem(FCHAT_KEY + '-msgs', JSON.stringify(a));
+      }
+      return messages;
+    } catch(e) { return []; }
   }
   function saveFChatMessage(roomId, msg) {
     try {
@@ -559,10 +595,13 @@
       var last = msgs.length ? msgs[msgs.length-1] : null;
       var unreadCount = u['fchat-' + r.id] || 0;
       var badge = unreadCount > 0 ? '<span class="fchat-unread-badge">' + (unreadCount > 9 ? '9+' : unreadCount) + '</span>' : '';
-      return '<div class="fchat-room-row" data-room-id="' + r.id + '" data-room-name="' + r.name + '">'
-        + '<div class="fchat-room-icon">' + r.name.slice(0,2) + '</div>'
-        + '<div class="fchat-room-info"><strong>' + r.name + '</strong>'
-        + '<small>' + (last ? last.from + ': ' + (last.voice ? '\uD83C\uDFA4 Voice note' : last.text.slice(0,30)) : r.desc) + '</small></div>'
+      var roomName = typeof r.name === 'string' ? r.name : 'Chat';
+      var preview = last ? last.from + ': ' + (last.voice ? '\uD83C\uDFA4 Voice note' : last.text.slice(0, 30))
+        : (typeof r.desc === 'string' ? r.desc : 'No messages yet');
+      return '<div class="fchat-room-row" data-room-id="' + escapePhoneHtml(r.id) + '" data-room-name="' + escapePhoneHtml(roomName) + '">'
+        + '<div class="fchat-room-icon">' + escapePhoneHtml(roomName.slice(0,2)) + '</div>'
+        + '<div class="fchat-room-info"><strong>' + escapePhoneHtml(roomName) + '</strong>'
+        + '<small>' + escapePhoneHtml(preview) + '</small></div>'
         + badge + '</div>';
     }).join('');
   }
@@ -572,17 +611,19 @@
   function renderFChatMsgList(msgs, roomId) {
     var el = document.getElementById('fchat-messages');
     if (!el) return;
+    msgs = normalizeFChatMessages(msgs);
     var me = (window.FeltoraAuth && window.FeltoraAuth.currentUser()) || 'Guest';
     var u = getUnread(); delete u['fchat-' + roomId]; lsSet(UNREAD_KEY, u);
     el.innerHTML = msgs.length ? msgs.map(function(m) {
       var mine = m.from === me;
-      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + m.from + '" data-text="' + encodeURIComponent(m.text || '') + '" title="Report">\u2691</button>' : '';
+      var sender = escapePhoneHtml(m.from);
+      var reportBtn = !mine ? '<button class="fchat-report-btn" data-from="' + sender + '" data-text="' + encodeURIComponent(m.text || '') + '" title="Report">\u2691</button>' : '';
       var reactBtn = '<button class="msg-react-btn" data-ts="' + m.ts + '" data-conv="fchat-' + roomId + '" title="React">\uD83D\uDE42</button>';
       var content = m.voice
-        ? '<audio class="voice-note-player" src="' + m.voice + '" controls preload="none"></audio>'
-        : '<span class="fchat-msg-text">' + (m.text || '') + '</span>';
+        ? '<audio class="voice-note-player" src="' + escapePhoneHtml(m.voice) + '" controls preload="none"></audio>'
+        : '<span class="fchat-msg-text">' + escapePhoneHtml(m.text) + '</span>';
       return '<div class="fchat-msg ' + (mine ? 'mine' : 'theirs') + '" data-ts="' + m.ts + '">'
-        + (!mine ? '<span class="fchat-msg-from">' + m.from + '</span>' : '')
+        + (!mine ? '<span class="fchat-msg-from">' + sender + '</span>' : '')
         + content
         + '<time>' + new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + '</time>'
         + reactBtn + reportBtn + '</div>';
@@ -612,6 +653,7 @@
       if (cached.length) renderFChatMsgList(cached, roomId);
       // subscribe real-time
       activeFChatListener = window.FeltoraFirebase.listenFChat(roomId, function(msgs) {
+        msgs = normalizeFChatMessages(msgs);
         renderFChatMsgList(msgs, roomId);
         // cache locally (cap 200)
         try {
@@ -800,47 +842,84 @@
   function renderMessageInbox() {
     var list = document.getElementById('phone-message-inbox');
     if (!list) return;
-    var friends = getFriends();
-    var threads = friends.map(function(friend) {
-      var messages = getMessages(friend);
-      return { friend: friend, message: messages.length ? messages[messages.length - 1] : null };
-    }).sort(function(a, b) {
-      return Number(b.message && b.message.ts || 0) - Number(a.message && a.message.ts || 0);
-    });
-    list.replaceChildren();
-    if (!threads.length) {
-      var empty = document.createElement('div');
-      empty.className = 'phone-inbox-empty';
-      var text = document.createElement('p');
-      text.textContent = 'Your conversations with FELTORA players will appear here.';
-      var add = document.createElement('button');
-      add.type = 'button';
-      add.dataset.phoneNav = 'contacts';
-      add.className = 'wallet-action-btn secondary';
-      add.textContent = 'Find a player';
-      empty.appendChild(text);
-      empty.appendChild(add);
-      list.appendChild(empty);
+    var auth = window.FeltoraAuth;
+    if (!auth || !auth.currentUser()) {
+      list.textContent = 'Sign in to read private messages.';
       return;
     }
-    threads.forEach(function(thread) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'phone-message-thread';
-      button.dataset.friend = thread.friend;
-      var title = document.createElement('strong');
-      title.textContent = '@' + thread.friend;
-      var preview = document.createElement('span');
-      preview.textContent = thread.message
-        ? (thread.message.voice ? 'Voice message' : thread.message.text || 'Message')
-        : 'Start a conversation';
-      var time = document.createElement('small');
-      time.textContent = thread.message ? new Date(thread.message.ts).toLocaleString() : 'FELTORA contact';
-      button.appendChild(title);
-      button.appendChild(preview);
-      button.appendChild(time);
-      list.appendChild(button);
-    });
+    var friends = getFriends();
+    var threadNames = friends.slice();
+    var requestId = ++messageInboxRequestId;
+    var accountKey = messageAccountKey();
+    function renderThreads(index) {
+      var indexEntries = {};
+      if (index && typeof index === 'object') {
+        Object.keys(index).forEach(function(peerUid) {
+          var entry = index[peerUid];
+          var username = entry && typeof entry.peerUsername === 'string' ? entry.peerUsername : '';
+          if (/^[a-z0-9_]{3,18}$/.test(username)) {
+            indexEntries[username] = entry;
+            if (threadNames.indexOf(username) === -1) threadNames.push(username);
+          }
+        });
+      }
+      var threads = threadNames.map(function(friend) {
+        var messages = getMessages(friend);
+        return { friend: friend, message: messages.length ? messages[messages.length - 1] : null, indexEntry: indexEntries[friend] };
+      }).sort(function(a, b) {
+        return Number((b.message && b.message.ts) || (b.indexEntry && b.indexEntry.updatedAt) || 0)
+          - Number((a.message && a.message.ts) || (a.indexEntry && a.indexEntry.updatedAt) || 0);
+      });
+      list.replaceChildren();
+      if (!threads.length) {
+        var empty = document.createElement('div');
+        empty.className = 'phone-inbox-empty';
+        var text = document.createElement('p');
+        text.textContent = 'Your conversations with FELTORA players will appear here.';
+        var add = document.createElement('button');
+        add.type = 'button';
+        add.dataset.phoneNav = 'contacts';
+        add.className = 'wallet-action-btn secondary';
+        add.textContent = 'Find a player';
+        empty.appendChild(text);
+        empty.appendChild(add);
+        list.appendChild(empty);
+        return;
+      }
+      threads.forEach(function(thread) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'phone-message-thread';
+        button.dataset.friend = thread.friend;
+        var title = document.createElement('strong');
+        title.textContent = '@' + thread.friend;
+        var preview = document.createElement('span');
+        preview.textContent = thread.message
+          ? (thread.message.voice ? 'Voice message' : thread.message.text || 'Message')
+          : thread.indexEntry ? 'Open conversation' : 'Start a conversation';
+        var time = document.createElement('small');
+        var timestamp = thread.message && thread.message.ts || thread.indexEntry && thread.indexEntry.updatedAt;
+        time.textContent = timestamp ? new Date(timestamp).toLocaleString() : 'FELTORA contact';
+        button.appendChild(title);
+        button.appendChild(preview);
+        button.appendChild(time);
+        list.appendChild(button);
+      });
+    }
+
+    renderThreads(null);
+    if (window.FeltoraFirebase && typeof window.FeltoraFirebase.getDMIndex === 'function') {
+      window.FeltoraFirebase.getDMIndex().then(function(index) {
+        if (requestId !== messageInboxRequestId || !auth.currentUser()
+            || messageAccountKey() !== accountKey) return;
+        renderThreads(index);
+      }).catch(function(error) {
+        if (requestId !== messageInboxRequestId || !auth.currentUser()
+            || messageAccountKey() !== accountKey) return;
+        console.error('Private message inbox could not load:', error);
+        showToast(error.message || 'Private message inbox could not load. Try again.');
+      });
+    }
   }
 
   // typing indicator state per friend
@@ -848,6 +927,7 @@
 
   // active DM listener — close when leaving chat
   var activeDMListener = null;
+  var messageInboxRequestId = 0;
 
   function renderChatMsgs(msgs, friendId) {
     var chatMessages = document.getElementById('phone-chat-messages');
@@ -891,10 +971,14 @@
         renderChatMsgs(msgs, friendId);
         // also cache locally
         try {
-          var a = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+          var key = MESSAGES_KEY + ':' + messageAccountKey();
+          var a = JSON.parse(localStorage.getItem(key) || '{}');
           a[friendId] = msgs.slice(-MSG_CAP);
-          localStorage.setItem(MESSAGES_KEY, JSON.stringify(a));
+          localStorage.setItem(key, JSON.stringify(a));
         } catch(e) {}
+      }, function(error) {
+        console.error('Private messages could not load:', error);
+        showToast(error.message || 'Private messages could not load. Try again.');
       });
     } else {
       renderChatMsgs(getMessages(friendId), friendId);
@@ -1405,13 +1489,18 @@
     }
     if (id === 'activity') {
       markWalletActivityRead();
+      markCommunityNotificationsRead();
       var store = window.FeltoraStore;
       if (store && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
         store.refreshWallet().catch(function(error) {
           console.error('Wallet activity could not be refreshed:', error);
         });
+        refreshCommunityLikeNotifications().then(markCommunityNotificationsRead).catch(function(error) {
+          console.error('Community notifications could not be refreshed:', error);
+        });
       } else {
         renderWalletActivity(null);
+        renderCommunityLikeNotifications();
       }
     }
   }
@@ -1463,6 +1552,7 @@
   }
 
   var WALLET_ALERTS_KEY = 'feltora-wallet-alerts';
+  var COMMUNITY_LIKE_ALERTS_KEY = 'feltora-community-like-alerts';
 
   function walletAlertsKey() {
     var auth = window.FeltoraAuth;
@@ -1488,6 +1578,31 @@
     }
   }
 
+  function communityLikeAlertsKey() {
+    var auth = window.FeltoraAuth;
+    return COMMUNITY_LIKE_ALERTS_KEY + ':' + (auth && (auth.uid() || auth.currentUser()) || 'guest');
+  }
+
+  function readCommunityLikeAlertState() {
+    try {
+      var state = JSON.parse(localStorage.getItem(communityLikeAlertsKey()) || 'null');
+      return state && Array.isArray(state.seenRefs) && Array.isArray(state.unreadRefs)
+        && Array.isArray(state.notifications)
+        ? state : { initialized: false, seenRefs: [], unreadRefs: [], notifications: [] };
+    } catch (error) {
+      console.error('Community notification state could not be read:', error);
+      return { initialized: false, seenRefs: [], unreadRefs: [], notifications: [] };
+    }
+  }
+
+  function saveCommunityLikeAlertState(state) {
+    try {
+      localStorage.setItem(communityLikeAlertsKey(), JSON.stringify(state));
+    } catch (error) {
+      console.error('Community notifications could not be saved on this device:', error);
+    }
+  }
+
   function walletTransactionMessage(transaction) {
     if (transaction.type === 'transfer_in') {
       return 'You received ' + Number(transaction.amount || 0).toLocaleString()
@@ -1507,19 +1622,118 @@
   }
 
   function updateWalletActivityBadge(count) {
+    var total = Number(count) + readCommunityLikeAlertState().unreadRefs.length;
     document.querySelectorAll('[data-open="activity"]').forEach(function(icon) {
       var badge = icon.querySelector('.app-badge');
-      if (count > 0) {
+      if (total > 0) {
         if (!badge) {
           badge = document.createElement('span');
           badge.className = 'app-badge';
           icon.appendChild(badge);
         }
-        badge.textContent = count > 9 ? '9+' : String(count);
+        badge.textContent = total > 9 ? '9+' : String(total);
       } else if (badge) {
         badge.remove();
       }
     });
+  }
+
+  function renderCommunityLikeNotifications() {
+    var list = document.getElementById('community-notifications');
+    if (!list) return;
+    var auth = window.FeltoraAuth;
+    if (!auth || !auth.currentUser()) {
+      list.textContent = 'Sign in to see notifications for your community posts.';
+      return;
+    }
+    var state = readCommunityLikeAlertState();
+    list.replaceChildren();
+    if (!state.notifications.length) {
+      var empty = document.createElement('p');
+      empty.textContent = 'Likes on your community posts will appear here.';
+      list.appendChild(empty);
+      return;
+    }
+    var unread = new Set(state.unreadRefs);
+    state.notifications.slice().sort(function(a, b) { return Number(b.ts) - Number(a.ts); })
+      .slice(0, 100).forEach(function(notification) {
+        var row = document.createElement('div');
+        row.className = 'wallet-transaction community-notification';
+        if (unread.has(notification.id)) row.classList.add('is-unread');
+        var description = document.createElement('strong');
+        description.textContent = '@' + notification.actorUsername + ' liked your community post.';
+        var date = document.createElement('span');
+        date.textContent = new Date(notification.ts).toLocaleString();
+        row.appendChild(description);
+        row.appendChild(date);
+        list.appendChild(row);
+      });
+  }
+
+  function handleCommunityLikeNotifications(data) {
+    var state = readCommunityLikeAlertState();
+    var shouldNotify = state.initialized;
+    var notifications = data && typeof data === 'object' ? Object.keys(data).map(function(id) {
+      var entry = data[id];
+      var timestamp = Number(entry && entry.ts);
+      if (!entry || entry.type !== 'community_like' || typeof entry.actorUsername !== 'string'
+          || !/^[a-z0-9_]{3,18}$/.test(entry.actorUsername)
+          || typeof entry.postId !== 'string' || !Number.isFinite(timestamp) || timestamp <= 0) return null;
+      return {
+        id: id,
+        type: 'community_like',
+        actorUsername: entry.actorUsername,
+        postId: entry.postId,
+        ts: timestamp
+      };
+    }).filter(Boolean) : [];
+    var seen = new Set(state.seenRefs);
+    var fresh = notifications.filter(function(notification) { return !seen.has(notification.id); });
+    fresh.forEach(function(notification) {
+      seen.add(notification.id);
+      state.unreadRefs.push(notification.id);
+    });
+    state.seenRefs = Array.from(seen).slice(-200);
+    state.unreadRefs = Array.from(new Set(state.unreadRefs)).slice(-100);
+    var byId = new Map(state.notifications.map(function(notification) { return [notification.id, notification]; }));
+    notifications.forEach(function(notification) { byId.set(notification.id, notification); });
+    state.notifications = Array.from(byId.values()).sort(function(a, b) { return Number(b.ts) - Number(a.ts); }).slice(0, 100);
+    state.initialized = true;
+    saveCommunityLikeAlertState(state);
+    updateWalletActivityBadge(readWalletAlertState().unreadRefs.length);
+    renderCommunityLikeNotifications();
+    if (shouldNotify) {
+      fresh.forEach(function(notification) {
+        showToast('@' + notification.actorUsername + ' liked your community post.');
+      });
+    }
+  }
+
+  function refreshCommunityLikeNotifications() {
+    var auth = window.FeltoraAuth;
+    var firebase = window.FeltoraFirebase;
+    if (!auth || !auth.currentUser() || !auth.uid() || !firebase) {
+      return Promise.resolve();
+    }
+    if (communityNotificationLoading) return communityNotificationPromise || Promise.resolve();
+    communityNotificationLoading = true;
+    var uid = auth.uid();
+    communityNotificationPromise = firebase.get('/notifications/' + encodeURIComponent(uid)).then(function(data) {
+      if (!window.FeltoraAuth || window.FeltoraAuth.uid() !== uid) return;
+      handleCommunityLikeNotifications(data);
+    }).finally(function() {
+      communityNotificationLoading = false;
+      communityNotificationPromise = null;
+    });
+    return communityNotificationPromise;
+  }
+
+  function markCommunityNotificationsRead() {
+    var state = readCommunityLikeAlertState();
+    state.unreadRefs = [];
+    saveCommunityLikeAlertState(state);
+    updateWalletActivityBadge(readWalletAlertState().unreadRefs.length);
+    renderCommunityLikeNotifications();
   }
 
   function renderWalletActivity(data) {
@@ -1882,9 +2096,11 @@
     if (copyHandle) copyHandle.addEventListener('click', copyWalletHandle);
     if (activityRefresh) activityRefresh.addEventListener('click', function() {
       var store = window.FeltoraStore;
-      if (!store) return;
-      store.refreshWallet().catch(function(error) {
-        console.error('Wallet activity could not be refreshed:', error);
+      if (store) store.refreshWallet().catch(function(error) {
+          console.error('Wallet activity could not be refreshed:', error);
+        });
+      refreshCommunityLikeNotifications().catch(function(error) {
+        console.error('Community notifications could not be refreshed:', error);
       });
     });
     if (refresh) refresh.addEventListener('click', function() {
@@ -1907,13 +2123,17 @@
   function pollWalletActivity() {
     var auth = window.FeltoraAuth;
     var store = window.FeltoraStore;
-    if (walletActivityLoading || document.hidden || !auth || !auth.currentUser()
-        || !store || !store.refreshWallet) return;
-    walletActivityLoading = true;
-    store.refreshWallet().catch(function(error) {
-      if (error.status !== 401) console.error('Wallet notifications could not be refreshed:', error);
-    }).finally(function() {
-      walletActivityLoading = false;
+    if (document.hidden || !auth || !auth.currentUser()) return;
+    if (store && store.refreshWallet && !walletActivityLoading) {
+      walletActivityLoading = true;
+      store.refreshWallet().catch(function(error) {
+        if (error.status !== 401) console.error('Wallet notifications could not be refreshed:', error);
+      }).finally(function() {
+        walletActivityLoading = false;
+      });
+    }
+    refreshCommunityLikeNotifications().catch(function(error) {
+      if (error.status !== 401) console.error('Community notifications could not be refreshed:', error);
     });
   }
 
@@ -1967,6 +2187,18 @@
 
   function openPhoneApp(app, tipAmount) {
     openGamePhone(app, tipAmount);
+  }
+
+  function openPrivateChat(username) {
+    var auth = window.FeltoraAuth;
+    username = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    if (!auth || !auth.currentUser() || !/^[a-z0-9_]{3,18}$/.test(username)
+        || username === auth.currentUser()) return false;
+    if (getFriends().indexOf(username) === -1 && !addFriend(username)) return false;
+    openGamePhone('contacts');
+    renderContacts();
+    renderChat(username);
+    return true;
   }
 
   function closeGamePhone() {
@@ -2196,10 +2428,9 @@
           var msg = { from: me, voice: base64, text: '', ts: Date.now() };
           var convId = (voiceTarget.type === 'dm' ? 'dm-' : 'fchat-') + voiceTarget.id;
           if (window.FeltoraFirebase) {
-            window.FeltoraFirebase.saveVoiceNote(convId, base64, me).catch(function() {
-              // fallback to localStorage
-              if (voiceTarget.type === 'dm') saveMessage(voiceTarget.id, msg);
-              else saveFChatMessage(voiceTarget.id, msg);
+            window.FeltoraFirebase.saveVoiceNote(convId, base64, me).catch(function(error) {
+              console.error('Voice message could not be sent:', error);
+              showToast(error.message || 'Voice message could not be sent.');
             });
           }
           // also save locally for instant playback
@@ -2323,6 +2554,28 @@
       handleWalletUpdate(event.detail);
       renderWallet(event.detail);
     });
+    window.addEventListener('feltora:auth-changed', function(event) {
+      if (event.detail && event.detail.signedIn) {
+        pollWalletActivity();
+        return;
+      }
+      if (activeDMListener) {
+        activeDMListener.close();
+        activeDMListener = null;
+      }
+      var chatMessages = document.getElementById('phone-chat-messages');
+      var messageInbox = document.getElementById('phone-message-inbox');
+      var chatView = document.getElementById('phone-chat-view');
+      if (chatMessages) chatMessages.replaceChildren();
+      if (messageInbox) messageInbox.replaceChildren();
+      var notificationList = document.getElementById('community-notifications');
+      if (notificationList) notificationList.textContent = 'Sign in to see notifications for your community posts.';
+      updateWalletActivityBadge(0);
+      if (chatView) {
+        chatView.style.display = 'none';
+        delete chatView.dataset.friend;
+      }
+    });
     startWalletActivityMonitor();
 
     var contactAdd = document.getElementById('phone-contact-add');
@@ -2442,20 +2695,25 @@
         var chatMessages = document.getElementById('phone-chat-messages');
         if (chatMessages) hideTypingIndicator(chatMessages);
         var msg = { from: me, text: txt, ts: Date.now() };
+        if (!window.FeltoraAuth || !window.FeltoraAuth.currentUser()) {
+          showToast('Sign in to send private messages.');
+          return;
+        }
+        if (!window.FeltoraFirebase) {
+          showToast('Private messages are unavailable. Check your connection and try again.');
+          return;
+        }
         input.value = '';
-        if (window.FeltoraFirebase) {
-          window.FeltoraFirebase.sendDM(chatView.dataset.friend, msg).catch(function() {
-            // fallback to localStorage if Firebase fails
-            saveMessage(chatView.dataset.friend, msg);
-            renderChat(chatView.dataset.friend);
-          });
-          // optimistic local render
+        sendBtn.disabled = true;
+        window.FeltoraFirebase.sendDM(chatView.dataset.friend, msg).then(function() {
           saveMessage(chatView.dataset.friend, msg);
           renderChatMsgs(getMessages(chatView.dataset.friend), chatView.dataset.friend);
-        } else {
-          saveMessage(chatView.dataset.friend, msg);
-          renderChat(chatView.dataset.friend);
-        }
+          renderMessageInbox();
+        }).catch(function(error) {
+          input.value = txt;
+          console.error('Private message could not be sent:', error);
+          showToast(error.message || 'Message could not be sent. Check your connection and try again.');
+        }).finally(function() { sendBtn.disabled = false; });
       }
       if (fchatRoomRow) openFChatRoom(fchatRoomRow.dataset.roomId, fchatRoomRow.dataset.roomName);
       if (fchatBack) {
@@ -2540,6 +2798,7 @@
     addFriend: addFriend,
     getFriends: getFriends,
     renderContacts: renderContacts,
+    openChat: openPrivateChat,
     showToast: showToast,
     notify: showToast,
     getPaymentConfig: function() {

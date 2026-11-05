@@ -176,11 +176,15 @@
   }
 
   async function lookupPlayer(username) {
+    return (await lookupPlayerIdentity(username)).username;
+  }
+
+  async function lookupPlayerIdentity(username) {
     var result = await walletAction('lookup-player', { username: username });
-    if (!result || typeof result.username !== 'string') {
+    if (!result || typeof result.username !== 'string' || typeof result.uid !== 'string') {
       throw new Error('The player lookup returned an invalid response.');
     }
-    return result.username;
+    return { username: result.username, uid: result.uid };
   }
 
   function newRequestId() {
@@ -485,6 +489,7 @@
     walletAction: walletAction,
     refreshWallet: refreshWallet,
     lookupPlayer: lookupPlayer,
+    lookupPlayerIdentity: lookupPlayerIdentity,
     getWallet: currentWallet,
     buyWithWallet: buyWithWallet,
     tipAmountForTier: tipAmountForTier,

@@ -579,7 +579,11 @@ const Auth = (() => {
       clearCloudSession();
       clearGoogleSession();
       pendingGoogleUser = null;
-      if (firebaseAuthInstance) await firebaseAuthInstance.signOut();
+      try {
+        if (firebaseAuthInstance) await firebaseAuthInstance.signOut();
+      } finally {
+        window.dispatchEvent(new CustomEvent('feltora:auth-changed', { detail: { signedIn: false } }));
+      }
     },
 
     update(fields) {

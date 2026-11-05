@@ -162,10 +162,6 @@ const Auth = (() => {
       pendingGoogleUser = user;
       return { ok: false, needsUsername: true };
     }
-    if (status.needsPin) {
-      pendingGoogleUser = user;
-      return { ok: false, needsPin: true, username: status.username };
-    }
     const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(user.uid));
     if (!profile) {
       pendingGoogleUser = user;
@@ -361,7 +357,10 @@ const Auth = (() => {
         const auth = await getFirebaseAuth();
         const redirectResult = await auth.getRedirectResult();
         const user = (redirectResult && redirectResult.user) || auth.currentUser;
-        if (user) return resolveGoogleUser(user);
+        if (user) {
+          const result = await resolveGoogleUser(user);
+          return result.ok ? Object.assign({}, result, { returningUser: true }) : result;
+        }
         if (savedGoogleSession) clearGoogleSession();
         return null;
       } catch (error) {

@@ -2606,8 +2606,13 @@ applyTheme(initialTheme);
 async function bootAuth() {
   try {
     const result = await window.FeltoraAuth.initialize();
-    if (result && (result.needsUsername || result.needsPin)) {
-      showGoogleUsernamePanel(result);
+    if (result && result.needsUsername) {
+      showGoogleUsernamePanel();
+      showScreen('auth');
+      return;
+    }
+    if (result && result.returningUser) {
+      showReturningGoogleUser(result.username);
       showScreen('auth');
       return;
     }
@@ -2743,6 +2748,7 @@ document.getElementById('tab-login').addEventListener('click', () => {
   document.getElementById('panel-login').hidden = false;
   document.getElementById('panel-register').hidden = true;
   document.getElementById('panel-google-username').hidden = true;
+  document.getElementById('panel-returning-user').hidden = true;
   document.getElementById('auth-provider').hidden = false;
 });
 document.getElementById('tab-register').addEventListener('click', () => {
@@ -2754,27 +2760,37 @@ document.getElementById('tab-register').addEventListener('click', () => {
   document.getElementById('panel-register').hidden = false;
   document.getElementById('panel-login').hidden = true;
   document.getElementById('panel-google-username').hidden = true;
+  document.getElementById('panel-returning-user').hidden = true;
   document.getElementById('auth-provider').hidden = false;
 });
 
-function showGoogleUsernamePanel(state) {
-  const needsPin = !!(state && state.needsPin);
+function showGoogleUsernamePanel() {
   const username = document.getElementById('google-username');
   document.getElementById('auth-tabs').hidden = true;
   document.getElementById('panel-login').hidden = true;
   document.getElementById('panel-register').hidden = true;
   document.getElementById('panel-google-username').hidden = false;
+  document.getElementById('panel-returning-user').hidden = true;
   document.getElementById('auth-provider').hidden = true;
-  document.getElementById('google-setup-title').textContent = needsPin
-    ? 'Add a sign-in PIN'
-    : 'Choose your FELTORA username';
-  document.getElementById('google-setup-copy').textContent = needsPin
-    ? 'Your Google account is connected. Add a PIN so you can also sign in with your username on any device.'
-    : 'Choose a username and 4-digit PIN. Use either Google or your username and PIN to sign in on any device.';
-  document.getElementById('google-finish-label').textContent = needsPin ? 'Save PIN' : 'Create account';
-  username.readOnly = needsPin;
-  if (needsPin) username.value = state.username;
-  document.getElementById(needsPin ? 'google-pin' : 'google-username').focus();
+  document.getElementById('google-setup-title').textContent = 'Choose your FELTORA username';
+  document.getElementById('google-setup-copy').textContent = 'Choose a username and 4-digit PIN. Use either Google or your username and PIN to sign in on any device.';
+  document.getElementById('google-finish-label').textContent = 'Create account';
+  username.readOnly = false;
+  username.value = '';
+  document.getElementById('google-pin').value = '';
+  document.getElementById('google-pin-confirm').value = '';
+  document.getElementById('google-username').focus();
+}
+
+function showReturningGoogleUser(username) {
+  document.getElementById('auth-tabs').hidden = true;
+  document.getElementById('panel-login').hidden = true;
+  document.getElementById('panel-register').hidden = true;
+  document.getElementById('panel-google-username').hidden = true;
+  document.getElementById('auth-provider').hidden = true;
+  document.getElementById('returning-google-username').textContent = username;
+  document.getElementById('returning-google-error').hidden = true;
+  document.getElementById('panel-returning-user').hidden = false;
 }
 
 function showAuthenticatedLobby(username) {
@@ -2791,8 +2807,8 @@ document.getElementById('btn-google-signin').addEventListener('click', async () 
   try {
     const result = await window.FeltoraAuth.googleSignIn();
     if (result.redirecting) return;
-    if (result.needsUsername || result.needsPin) {
-      showGoogleUsernamePanel(result);
+    if (result.needsUsername) {
+      showGoogleUsernamePanel();
       return;
     }
     if (!result.ok) {
@@ -2848,6 +2864,31 @@ document.getElementById('btn-google-cancel').addEventListener('click', async () 
     document.getElementById('tab-login').click();
   } catch (error) {
     showAuthError('google-error', error.message || 'Could not cancel Google sign-in.');
+  }
+});
+
+document.getElementById('btn-returning-continue').addEventListener('click', () => {
+  const username = window.FeltoraAuth.currentUser();
+  if (!username) {
+    showAuthError('returning-google-error', 'Your saved Google session expired. Sign in with Google again.');
+    return;
+  }
+  showAuthenticatedLobby(username);
+});
+
+document.getElementById('btn-returning-switch').addEventListener('click', async () => {
+  const button = document.getElementById('btn-returning-switch');
+  button.disabled = true;
+  try {
+    await window.FeltoraAuth.logout();
+    document.getElementById('panel-returning-user').hidden = true;
+    document.getElementById('auth-tabs').hidden = false;
+    document.getElementById('auth-provider').hidden = false;
+    document.getElementById('tab-login').click();
+  } catch (error) {
+    showAuthError('returning-google-error', error.message || 'Could not switch accounts.');
+  } finally {
+    button.disabled = false;
   }
 });
 

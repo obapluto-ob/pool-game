@@ -126,6 +126,18 @@
             <button class="auth-guest-btn" id="btn-google-cancel" type="button">Use another sign-in method</button>
           </div>
 
+          <div class="auth-panel google-username-panel" id="panel-returning-user" hidden>
+            <div>
+              <h2 class="google-setup-title">Welcome back</h2>
+              <p class="google-setup-copy">Continue to the Clubhouse as <strong id="returning-google-username"></strong>?</p>
+            </div>
+            <p class="auth-error" id="returning-google-error" hidden></p>
+            <button class="mode-btn primary auth-submit" id="btn-returning-continue" type="button">
+              <span>Continue</span><span class="meta">→</span>
+            </button>
+            <button class="auth-guest-btn" id="btn-returning-switch" type="button">Use another account</button>
+          </div>
+
           <div class="auth-provider" id="auth-provider">
             <div class="auth-or"><span>or</span></div>
             <button class="google-signin-btn" id="btn-google-signin" type="button">
@@ -1184,7 +1196,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261107-v11" defer></script>
+  <script src="src/auth.js?v=20261107-v13" defer></script>
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>

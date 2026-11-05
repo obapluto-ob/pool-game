@@ -244,12 +244,9 @@ async function verifyGoogleIdToken(auth, idToken) {
 
 async function getGoogleAccountStatus(auth, database, idToken) {
   const decoded = await verifyGoogleIdToken(auth, idToken);
-  const [profileSnapshot, credentialSnapshot] = await Promise.all([
-    database.ref('/profiles/' + decoded.uid).once('value'),
-    database.ref('/authCredentials/' + decoded.uid).once('value')
-  ]);
+  const profileSnapshot = await database.ref('/profiles/' + decoded.uid).once('value');
   const profile = profileSnapshot.val();
-  if (!profile) return { needsUsername: true, needsPin: false };
+  if (!profile) return { needsUsername: true };
   if (typeof profile.username !== 'string') {
     throw httpError(403, 'This Google account has an invalid FELTORA profile.');
   }
@@ -257,8 +254,7 @@ async function getGoogleAccountStatus(auth, database, idToken) {
   if (reservation !== decoded.uid) throw httpError(403, 'This FELTORA account could not be verified.');
   return {
     username: profile.username,
-    needsUsername: false,
-    needsPin: !credentialSnapshot.exists()
+    needsUsername: false
   };
 }
 

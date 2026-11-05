@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { cert, getApps, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
+const { creditWalletTopUp } = require('./wallet');
 
 const DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://feltora-spots-default-rtdb.firebaseio.com';
 const TIP_UNLOCKS = {
@@ -161,6 +162,30 @@ module.exports = async function handler(req, res) {
       const reference = typeof data.reference === 'string' ? data.reference : '';
       if (!reference || !/^[A-Za-z0-9_-]{1,128}$/.test(reference)) {
         return res.status(400).json({ error: 'Invalid payment reference.' });
+      }
+      if (data.metadata && data.metadata.paymentKind === 'wallet_topup') {
+        const intentRef = database.ref('/walletPaymentIntents/' + reference);
+        const intent = (await intentRef.once('value')).val();
+        if (!intent) {
+          console.error('Signed wallet payment has no matching top-up intent:', reference);
+          await database.ref('/walletPaymentEvents/' + reference).set({
+            reference,
+            status: 'unmatched',
+            ts: Date.now()
+          });
+          return res.status(200).json({ received: true, walletTopUp: false });
+        }
+        await creditWalletTopUp(database, intent.uid, intent, data);
+        await database.ref('/walletPaymentEvents/' + reference).set({
+          reference,
+          amount: Number(data.amount) || 0,
+          currency: data.currency || '',
+          status: 'credited',
+          paidAt: data.paid_at || new Date().toISOString(),
+          ts: Date.now()
+        });
+        await sendEmailNotification('charge.success', data);
+        return res.status(200).json({ received: true, walletTopUp: true });
       }
       const claimRef = database.ref('/processedTipReferences/' + reference);
       const claim = await claimRef.transaction((current) => current ? undefined : {

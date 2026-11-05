@@ -67,12 +67,20 @@
   };
   var currentTab = 'all';
   var selectedAmount = 0;
+  var walletState = { balance: 0, inventory: {}, transactions: [], loaded: false, uid: null };
   var fallbackSessionId = 'tab-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
 
   function account() {
     var auth = window.FeltoraAuth;
     var username = auth && auth.currentUser();
     return username && auth.getAccount(username);
+  }
+
+  function currentWallet() {
+    var auth = window.FeltoraAuth;
+    return auth && walletState.uid === auth.uid()
+      ? walletState
+      : { balance: 0, inventory: {}, transactions: [], loaded: false, uid: auth && auth.uid() };
   }
 
   function normalizeUnlocks(value) {
@@ -114,6 +122,63 @@
     return !!(profile && profile.unlocks && Number(profile.unlocks.tipTier) > 0) || isSupporter(profile);
   }
 
+  function syncWallet(response) {
+    if (!response || !Number.isSafeInteger(response.balance) || response.balance < 0) {
+      throw new Error('The wallet returned an invalid balance. Refresh and try again.');
+    }
+    var inventory = response.inventory && typeof response.inventory === 'object' ? response.inventory : {};
+    walletState = {
+      balance: response.balance,
+      inventory: inventory,
+      transactions: Array.isArray(response.transactions) ? response.transactions : [],
+      loaded: true,
+      uid: window.FeltoraAuth && window.FeltoraAuth.uid()
+    };
+    render();
+    return walletState;
+  }
+
+  async function walletAction(action, fields) {
+    var auth = window.FeltoraAuth;
+    if (!auth || !auth.currentUser()) throw new Error('Sign in to use wallet credits.');
+    var uid = auth.uid();
+    if (walletState.uid && walletState.uid !== uid) {
+      walletState = { balance: 0, inventory: {}, transactions: [], loaded: false, uid: uid };
+    }
+    var idToken = await auth.getIdToken();
+    var response = await fetch('/api/wallet', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + idToken
+      },
+      body: JSON.stringify(Object.assign({ action: action }, fields || {}))
+    });
+    var result = await response.json().catch(function() { return {}; });
+    if (!response.ok) {
+      var error = new Error(result.error || 'The wallet request could not be completed.');
+      error.status = response.status;
+      throw error;
+    }
+    if (Number.isSafeInteger(result.balance)) syncWallet(result);
+    return result;
+  }
+
+  async function refreshWallet() {
+    var auth = window.FeltoraAuth;
+    if (!auth || !auth.currentUser()) {
+      walletState = { balance: 0, inventory: {}, transactions: [], loaded: false, uid: null };
+      render();
+      throw new Error('Sign in to see your FELTORA wallet.');
+    }
+    return walletAction('get');
+  }
+
+  function newRequestId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+  }
+
   function tipAmountForTier(tier) {
     var config = window.FeltoraPhone && window.FeltoraPhone.getPaymentConfig
       ? window.FeltoraPhone.getPaymentConfig() : { currency: 'KES' };
@@ -148,7 +213,9 @@
 
   function owns(item, profile) {
     var unlocks = normalizeUnlocks(profile && profile.unlocks);
+    var wallet = currentWallet();
     return unlocks[item.category].indexOf(item.id) !== -1
+      || (wallet.inventory[item.category] || []).indexOf(item.id) !== -1
       || (item.tipTier && unlocks.tipTier >= item.tipTier);
   }
 
@@ -164,7 +231,7 @@
   }
 
   function itemPrice(item) {
-    if (item.price) return item.price + ' pts';
+    if (item.price) return item.price.toLocaleString() + ' pts · ' + item.price.toLocaleString() + ' credits';
     if (item.tipTier) {
       var config = window.FeltoraPhone && window.FeltoraPhone.getPaymentConfig
         ? window.FeltoraPhone.getPaymentConfig() : { currency: 'KES', symbol: 'KES' };
@@ -177,6 +244,8 @@
     var grid = document.getElementById('store-grid');
     var tabs = document.getElementById('store-tabs');
     var balance = document.getElementById('store-points');
+    var walletBalance = document.getElementById('store-wallet-balance');
+    var wallet = currentWallet();
     var profile = account();
     if (!grid || !tabs || !balance) return;
     tabs.innerHTML = TABS.map(function(tab) {
@@ -184,6 +253,7 @@
     }).join('');
     var points = normalizePoints(profile && profile.points);
     balance.textContent = points.today.toLocaleString();
+    if (walletBalance) walletBalance.textContent = wallet.loaded ? wallet.balance.toLocaleString() : '—';
     var items = CATALOG.filter(function(item) { return currentTab === 'all' || item.category === currentTab; });
     grid.innerHTML = items.map(function(item) {
       var owned = owns(item, profile);
@@ -192,7 +262,10 @@
       if (!profile) action = '<button type="button" class="store-action" data-store-action="signin">Sign in to save</button>';
       else if (equippedNow) action = '<button type="button" class="store-action equipped" disabled>Equipped</button>';
       else if (owned) action = '<button type="button" class="store-action" data-store-action="equip" data-item="' + item.id + '">Equip</button>';
-      else if (item.price !== undefined) action = '<button type="button" class="store-action" data-store-action="unlock" data-item="' + item.id + '"' + (points.today < item.price ? ' disabled' : '') + '>Unlock</button>';
+      else if (item.price !== undefined) action = '<div class="store-actions">'
+        + '<button type="button" class="store-action" data-store-action="unlock" data-item="' + item.id + '"' + (points.today < item.price ? ' disabled' : '') + '>Unlock with points</button>'
+        + '<button type="button" class="store-action wallet-store-action" data-store-action="buy-wallet" data-item="' + item.id + '"' + (!wallet.loaded || wallet.balance < item.price ? ' disabled' : '') + '>Buy with ' + item.price.toLocaleString() + ' credits</button>'
+        + '</div>';
       else action = '<button type="button" class="store-action" data-store-action="tip" data-tier="' + item.tipTier + '">Tip to unlock</button>';
       return '<article class="store-card' + (equippedNow ? ' is-equipped' : '') + '">'
         + '<div class="store-card-art" aria-hidden="true">' + item.icon + (owned ? '' : '<span class="store-lock" aria-label="Locked">🔒</span>') + '</div>'
@@ -215,6 +288,23 @@
     if (unlocks[item.category].indexOf(item.id) === -1) unlocks[item.category].push(item.id);
     points.today -= item.price;
     save({ points: points, unlocks: unlocks });
+    render();
+    return true;
+  }
+
+  async function buyWithWallet(item) {
+    var profile = account();
+    if (!profile) throw new Error('Sign in to purchase store items.');
+    if (!item || !item.price || owns(item, profile)) return false;
+    if (!currentWallet().loaded) await refreshWallet();
+    var result = await walletAction('purchase', {
+      category: item.category,
+      itemId: item.id,
+      requestId: newRequestId()
+    });
+    if (window.FeltoraPhone && window.FeltoraPhone.notify) {
+      window.FeltoraPhone.notify(result.alreadyOwned ? 'You already own this item.' : item.name + ' unlocked with wallet credits.');
+    }
     render();
     return true;
   }
@@ -345,8 +435,19 @@
       if (button.dataset.storeAction === 'signin') {
         if (typeof window.showScreen === 'function') window.showScreen('auth');
       } else if (button.dataset.storeAction === 'unlock' && item) unlock(item);
+      else if (button.dataset.storeAction === 'buy-wallet' && item) {
+        button.disabled = true;
+        buyWithWallet(item).catch(function(error) {
+          if (window.FeltoraPhone && window.FeltoraPhone.notify) window.FeltoraPhone.notify(error.message);
+          render();
+        });
+      }
       else if (button.dataset.storeAction === 'equip' && item) equip(item);
       else if (button.dataset.storeAction === 'tip') openTip(Number(button.dataset.tier));
+    });
+    var topUp = document.getElementById('store-wallet-topup');
+    if (topUp) topUp.addEventListener('click', function() {
+      if (window.FeltoraPhone) window.FeltoraPhone.openApp('mpesa');
     });
     var saveTitle = document.getElementById('store-custom-title-save');
     if (saveTitle) saveTitle.addEventListener('click', function() {
@@ -372,6 +473,10 @@
     rankForXp: rankForXp,
     hasTipTier: hasTipTier,
     openTip: openTip,
+    walletAction: walletAction,
+    refreshWallet: refreshWallet,
+    getWallet: currentWallet,
+    buyWithWallet: buyWithWallet,
     tipAmountForTier: tipAmountForTier,
     getPoints: function() {
       var profile = account();

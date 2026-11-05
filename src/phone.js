@@ -941,6 +941,27 @@
     });
   }
 
+  function verifyTipPayment(reference) {
+    var headers = { 'Content-Type': 'application/json' };
+    var auth = window.FeltoraAuth;
+    var token = auth && auth.uid && auth.uid() && auth.getIdToken ? auth.getIdToken() : Promise.resolve(null);
+    return Promise.resolve(token).then(function(idToken) {
+      if (idToken) headers.Authorization = 'Bearer ' + idToken;
+      return fetch('/api/wallet', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ action: 'verify-tip', reference: reference })
+      });
+    }).then(function(response) {
+      return response.json().catch(function() { return {}; }).then(function(result) {
+        if (!response.ok || !result.verified) {
+          throw new Error(result.error || 'Paystack has not verified this tip yet.');
+        }
+        return result;
+      });
+    });
+  }
+
   function triggerPaystack(amount, email) {
     var cfg = getGeoConfig(userCountry);
     var thanks = getThankyouMessage(amount, cfg.currency, cfg.symbol);
@@ -954,6 +975,7 @@
       channels: cfg.channels,
       ref: ref,
       metadata: {
+        paymentKind: 'tip',
         uid: window.FeltoraAuth && window.FeltoraAuth.uid() || '',
         username: window.FeltoraAuth && window.FeltoraAuth.currentUser() || '',
         custom_fields: [
@@ -963,31 +985,39 @@
         ]
       },
       callback: function(response) {
-        var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
-        if (uid) refreshVerifiedSupporter(uid, 0);
-        // Show personalised thank you screen
-        var tipView = document.getElementById('phone-tip-view-inner');
-        if (tipView) {
-          tipView.innerHTML = '<div class="tip-thankyou-screen">'
-            + '<div class="tip-ty-emoji">' + thanks.emoji + '</div>'
-            + '<h3 class="tip-ty-title">Thank you!</h3>'
-            + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
-            + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cfg.currency + '</div>'
-            + '<div class="tip-ty-ref"></div>'
-            + '<button class="tip-ty-back ob-btn-primary" type="button">Back to FELTORA</button>'
-            + '</div>';
-          var refEl = tipView.querySelector('.tip-ty-ref');
-          if (refEl) refEl.textContent = 'Ref: ' + response.reference;
-          var backBtn = tipView.querySelector('.tip-ty-back');
-          if (backBtn) backBtn.addEventListener('click', function() {
-            if (tipViewTemplate !== null) tipView.innerHTML = tipViewTemplate;
-            selectedTipAmt = 0;
-            tipInitDone = false;
-            initTipView();
-            phoneShowView('home');
-          });
+        if (!response || !response.reference) {
+          showToast('Paystack returned no payment reference. Please check your payment status before trying again.');
+          return;
         }
-        showToast(thanks.emoji + ' ' + thanks.msg.slice(0, 60) + '...');
+        verifyTipPayment(response.reference).then(function() {
+          var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
+          if (uid) refreshVerifiedSupporter(uid, 0);
+          var tipView = document.getElementById('phone-tip-view-inner');
+          if (tipView) {
+            tipView.innerHTML = '<div class="tip-thankyou-screen">'
+              + '<div class="tip-ty-emoji">' + thanks.emoji + '</div>'
+              + '<h3 class="tip-ty-title">Thank you!</h3>'
+              + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
+              + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cfg.currency + '</div>'
+              + '<div class="tip-ty-ref"></div>'
+              + '<button class="tip-ty-back ob-btn-primary" type="button">Back to FELTORA</button>'
+              + '</div>';
+            var refEl = tipView.querySelector('.tip-ty-ref');
+            if (refEl) refEl.textContent = 'Verified ref: ' + response.reference;
+            var backBtn = tipView.querySelector('.tip-ty-back');
+            if (backBtn) backBtn.addEventListener('click', function() {
+              if (tipViewTemplate !== null) tipView.innerHTML = tipViewTemplate;
+              selectedTipAmt = 0;
+              tipInitDone = false;
+              initTipView();
+              phoneShowView('home');
+            });
+          }
+          showToast(thanks.emoji + ' Tip verified. Thank you for supporting FELTORA!');
+        }).catch(function(error) {
+          console.error('Paystack tip verification failed:', error);
+          showToast('Payment is not verified yet. Keep reference ' + response.reference + ' and check again shortly.');
+        });
       },
       onClose: function() {
         // user closed without paying — show gentle nudge
@@ -1219,6 +1249,287 @@
     if (id === 'store' && window.FeltoraStore) window.FeltoraStore.render();
     if (id === 'orion') updateOrionLimit();
     if (id === 'radio') buildRadioList();
+    if (id === 'store' && window.FeltoraStore && window.FeltoraAuth && window.FeltoraAuth.currentUser()) {
+      window.FeltoraStore.refreshWallet().catch(function(error) {
+        if (window.FeltoraPhone && window.FeltoraPhone.notify) window.FeltoraPhone.notify(error.message);
+      });
+    }
+    if (id === 'mpesa') {
+      refreshPhoneWallet().catch(function(error) {
+        console.error('Wallet could not be refreshed:', error);
+      });
+      verifyWalletReturn();
+    }
+  }
+
+  var walletBusy = false;
+  var walletTransferRequest = null;
+  var walletReturnPromise = null;
+  var WALLET_TRANSFER_STORAGE_KEY = 'feltora-wallet-transfer';
+
+  function saveWalletTransferRequest(request) {
+    try {
+      localStorage.setItem(WALLET_TRANSFER_STORAGE_KEY, JSON.stringify(request));
+      walletTransferRequest = request;
+    } catch (error) {
+      throw new Error('This transfer could not be saved for safe retry. Check device storage and try again.');
+    }
+  }
+
+  function clearWalletTransferRequest() {
+    walletTransferRequest = null;
+    try {
+      localStorage.removeItem(WALLET_TRANSFER_STORAGE_KEY);
+    } catch (error) {
+      console.error('The completed wallet transfer retry record could not be cleared:', error);
+    }
+  }
+
+  function restoreWalletTransferRequest() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(WALLET_TRANSFER_STORAGE_KEY) || 'null');
+      var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
+      if (!saved || saved.uid !== uid || !saved.requestId || !saved.toUsername || !saved.amount) return;
+      walletTransferRequest = saved;
+      var recipient = document.getElementById('wallet-recipient');
+      var amount = document.getElementById('wallet-transfer-amount');
+      if (recipient) recipient.value = saved.toUsername;
+      if (amount) amount.value = saved.amount;
+      setWalletStatus('A previous transfer is awaiting confirmation. Retry with the same username and amount, or refresh your wallet.');
+    } catch (error) {
+      console.error('The pending wallet transfer could not be restored:', error);
+    }
+  }
+
+  function setWalletStatus(message, isError) {
+    var status = document.getElementById('wallet-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.toggle('is-error', !!isError);
+  }
+
+  function renderWallet(data) {
+    var balance = document.getElementById('wallet-balance');
+    var list = document.getElementById('wallet-transactions');
+    if (balance) balance.textContent = Number(data.balance || 0).toLocaleString();
+    if (!list) return;
+    list.textContent = '';
+    var entries = Array.isArray(data.transactions) ? data.transactions : [];
+    if (!entries.length) {
+      var empty = document.createElement('p');
+      empty.textContent = 'No wallet activity yet.';
+      list.appendChild(empty);
+      return;
+    }
+    entries.forEach(function(transaction) {
+      var row = document.createElement('div');
+      row.className = 'wallet-transaction';
+      var description = document.createElement('strong');
+      var amount = document.createElement('strong');
+      var date = document.createElement('span');
+      var type = transaction.type;
+      if (type === 'top_up') description.textContent = 'Credits added · KSh ' + Number(transaction.amountKes || 0).toLocaleString();
+      else if (type === 'store_purchase') description.textContent = 'Store purchase · ' + String(transaction.itemName || transaction.itemId || 'Item');
+      else if (type === 'transfer_out') description.textContent = 'Sent to @' + String(transaction.toUsername || 'player');
+      else if (type === 'transfer_in') description.textContent = 'Received from @' + String(transaction.fromUsername || 'player');
+      else description.textContent = 'Wallet activity';
+      amount.className = transaction.direction === 'in' ? 'credit-in' : 'credit-out';
+      amount.textContent = (transaction.direction === 'in' ? '+' : '−')
+        + Number(transaction.amount || 0).toLocaleString() + ' credits';
+      date.textContent = transaction.status === 'pending'
+        ? 'Processing transfer…'
+        : new Date(Number(transaction.createdAt) || Date.now()).toLocaleString();
+      row.appendChild(description);
+      row.appendChild(amount);
+      row.appendChild(date);
+      list.appendChild(row);
+    });
+  }
+
+  function updateWalletButtons() {
+    var signedIn = !!(window.FeltoraAuth && window.FeltoraAuth.currentUser());
+    var signIn = document.getElementById('wallet-signin');
+    var topUp = document.getElementById('wallet-topup');
+    var send = document.getElementById('wallet-send');
+    if (signIn) signIn.hidden = signedIn;
+    if (topUp) topUp.disabled = walletBusy || !signedIn;
+    if (send) send.disabled = walletBusy || !signedIn;
+  }
+
+  function refreshPhoneWallet() {
+    var store = window.FeltoraStore;
+    if (!store || !store.refreshWallet) {
+      setWalletStatus('Wallet service is unavailable. Please reload and try again.', true);
+      return Promise.reject(new Error('Wallet service is unavailable.'));
+    }
+    if (!window.FeltoraAuth || !window.FeltoraAuth.currentUser()) {
+      var balance = document.getElementById('wallet-balance');
+      var list = document.getElementById('wallet-transactions');
+      if (balance) balance.textContent = '—';
+      if (list) list.textContent = 'Sign in to load wallet activity.';
+      setWalletStatus('Sign in to add, spend, send, or view game credits.');
+      updateWalletButtons();
+      return Promise.resolve(null);
+    }
+    updateWalletButtons();
+    setWalletStatus('Loading wallet…');
+    return store.refreshWallet().then(function(data) {
+      renderWallet(data);
+      if (walletTransferRequest && data.transactions.some(function(transaction) {
+        return transaction.clientRequestId === walletTransferRequest.requestId
+          && transaction.status === 'completed';
+      })) clearWalletTransferRequest();
+      setWalletStatus('');
+      updateWalletButtons();
+      return data;
+    }).catch(function(error) {
+      setWalletStatus(error.message || 'Wallet could not be loaded. Try refreshing.', true);
+      updateWalletButtons();
+      throw error;
+    });
+  }
+
+  function handleWalletError(error) {
+    setWalletStatus(error.message || 'Wallet action could not be completed.', true);
+    updateWalletButtons();
+  }
+
+  function walletTopUp() {
+    if (walletBusy) return;
+    var amountInput = document.getElementById('wallet-topup-amount');
+    var emailInput = document.getElementById('wallet-email');
+    var amountKes = amountInput ? Number(amountInput.value) : 0;
+    var email = emailInput ? emailInput.value.trim() : '';
+    if (!Number.isSafeInteger(amountKes) || amountKes < 100) {
+      setWalletStatus('The minimum top-up is KSh 100.', true);
+      return;
+    }
+    if (!email || email.indexOf('@') < 1) {
+      setWalletStatus('Enter a valid email address for your receipt.', true);
+      if (emailInput) emailInput.focus();
+      return;
+    }
+    walletBusy = true;
+    updateWalletButtons();
+    setWalletStatus('Preparing secure Paystack checkout…');
+    window.FeltoraStore.walletAction('initialize-top-up', {
+      amountKes: amountKes,
+      email: email,
+      callbackUrl: window.location.origin + window.location.pathname
+    }).then(function(result) {
+      if (!result.authorizationUrl) throw new Error('Paystack did not return a checkout link.');
+      setWalletStatus('Opening secure checkout…');
+      window.location.assign(result.authorizationUrl);
+    }).catch(function(error) {
+      walletBusy = false;
+      handleWalletError(error);
+    });
+  }
+
+  function sendWalletCredits() {
+    if (walletBusy) return;
+    var recipientInput = document.getElementById('wallet-recipient');
+    var amountInput = document.getElementById('wallet-transfer-amount');
+    var username = recipientInput ? recipientInput.value.trim().toLowerCase() : '';
+    var amount = amountInput ? Number(amountInput.value) : 0;
+    if (!/^[a-z0-9_]{3,18}$/.test(username)) {
+      setWalletStatus('Enter a valid FELTORA username.', true);
+      if (recipientInput) recipientInput.focus();
+      return;
+    }
+    if (!Number.isSafeInteger(amount) || amount < 1) {
+      setWalletStatus('Enter a whole number of credits to send.', true);
+      if (amountInput) amountInput.focus();
+      return;
+    }
+    if (!window.confirm('Send ' + amount.toLocaleString() + ' credits to @' + username + '? This transfer cannot be undone.')) return;
+    var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
+    if (walletTransferRequest && walletTransferRequest.uid !== uid) clearWalletTransferRequest();
+    if (walletTransferRequest
+        && (walletTransferRequest.toUsername !== username || Number(walletTransferRequest.amount) !== amount)) {
+      setWalletStatus('A transfer to @' + walletTransferRequest.toUsername + ' for '
+        + Number(walletTransferRequest.amount).toLocaleString()
+        + ' credits still needs confirmation. Retry it with the same details or refresh your wallet.', true);
+      return;
+    }
+    if (!walletTransferRequest) {
+      var requestId = window.crypto && typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      try {
+        saveWalletTransferRequest({ uid: uid, requestId: requestId, toUsername: username, amount: amount });
+      } catch (error) {
+        setWalletStatus(error.message, true);
+        return;
+      }
+    }
+    walletBusy = true;
+    updateWalletButtons();
+    setWalletStatus('Sending credits securely…');
+    window.FeltoraStore.walletAction('transfer', {
+      toUsername: walletTransferRequest.toUsername,
+      amount: walletTransferRequest.amount,
+      requestId: walletTransferRequest.requestId
+    }).then(function(data) {
+      clearWalletTransferRequest();
+      renderWallet(data);
+      if (amountInput) amountInput.value = '';
+      setWalletStatus('Credits sent to @' + username + '.');
+      if (window.FeltoraPhone && window.FeltoraPhone.notify) {
+        window.FeltoraPhone.notify('Sent ' + amount.toLocaleString() + ' credits to @' + username + '.');
+      }
+    }).catch(function(error) {
+      if (error.status && error.status < 500) clearWalletTransferRequest();
+      handleWalletError(error);
+    }).finally(function() {
+      walletBusy = false;
+      updateWalletButtons();
+    });
+  }
+
+  function verifyWalletReturn() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('wallet') !== 'return') return;
+    var reference = params.get('reference') || params.get('trxref');
+    if (!reference || walletReturnPromise || !window.FeltoraStore) return;
+    walletReturnPromise = Promise.resolve();
+    openGamePhone('mpesa');
+    setWalletStatus('Verifying your Paystack payment…');
+    walletReturnPromise = window.FeltoraStore.walletAction('verify-top-up', { reference: reference })
+      .then(function(data) {
+        renderWallet(data);
+        setWalletStatus('Payment verified. Your game credits are ready.');
+        var cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+      })
+      .catch(function(error) {
+        walletReturnPromise = null;
+        handleWalletError(error);
+      });
+  }
+
+  function initWalletApp() {
+    var topUp = document.getElementById('wallet-topup');
+    var send = document.getElementById('wallet-send');
+    var refresh = document.getElementById('wallet-refresh');
+    var signIn = document.getElementById('wallet-signin');
+    if (topUp) topUp.addEventListener('click', walletTopUp);
+    if (send) send.addEventListener('click', sendWalletCredits);
+    if (refresh) refresh.addEventListener('click', function() {
+      if (new URLSearchParams(window.location.search).get('wallet') === 'return') {
+        verifyWalletReturn();
+        return;
+      }
+      refreshPhoneWallet().catch(function(error) {
+        console.error('Wallet could not be refreshed:', error);
+      });
+    });
+    if (signIn) signIn.addEventListener('click', function() {
+      closeGamePhone();
+      if (typeof window.showScreen === 'function') window.showScreen('auth');
+    });
+    restoreWalletTransferRequest();
+    updateWalletButtons();
   }
 
   // -- Floating FAB
@@ -1558,6 +1869,8 @@
   function initPhoneApp() {
     var phoneApp = document.getElementById('phone-app');
     if (!phoneApp) return;
+    initWalletApp();
+    verifyWalletReturn();
 
     // typing indicator on DM input
     var chatInput = document.getElementById('phone-chat-input');
@@ -1755,6 +2068,7 @@
     getFriends: getFriends,
     renderContacts: renderContacts,
     showToast: showToast,
+    notify: showToast,
     getPaymentConfig: function() {
       var config = getGeoConfig(userCountry);
       return { currency: config.currency, symbol: config.symbol };

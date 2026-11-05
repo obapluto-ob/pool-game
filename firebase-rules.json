@@ -75,6 +75,22 @@
       ".read": false,
       ".write": false
     },
+    "wallets": {
+      ".read": false,
+      ".write": false
+    },
+    "walletPaymentIntents": {
+      ".read": false,
+      ".write": false
+    },
+    "walletPaymentEvents": {
+      ".read": false,
+      ".write": false
+    },
+    "walletTransfers": {
+      ".read": false,
+      ".write": false
+    },
     "profiles": {
       ".read": true,
       "$uid": {

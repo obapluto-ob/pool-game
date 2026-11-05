@@ -135,7 +135,11 @@ function setCueStyle(style, syncProfile = false) {
   document.documentElement.style.setProperty('--cue-main', palette.main);
   document.documentElement.style.setProperty('--cue-dark', palette.dark);
   document.documentElement.style.setProperty('--cue-glow', palette.glow);
-  document.querySelectorAll('[data-cue]').forEach((b) => b.classList.toggle('active', b.dataset.cue === style));
+  document.querySelectorAll('[data-cue]').forEach((b) => {
+    const selected = b.dataset.cue === style;
+    b.classList.toggle('active', selected);
+    b.setAttribute('aria-pressed', String(selected));
+  });
   if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ cue: style });
   try { localStorage.setItem('feltora-cue', style); } catch {}
 }
@@ -155,7 +159,11 @@ function setFelt(felt, syncProfile = false) {
   r.style.setProperty('--cushion-center',  p.cushionCenter);
   r.style.setProperty('--cushion-bottom',  p.cushionBottom);
   updateTableColors();
-  document.querySelectorAll('[data-felt]').forEach((b) => b.classList.toggle('active', b.dataset.felt === felt));
+  document.querySelectorAll('[data-felt]').forEach((b) => {
+    const selected = b.dataset.felt === felt;
+    b.classList.toggle('active', selected);
+    b.setAttribute('aria-pressed', String(selected));
+  });
   if (syncProfile && window.FeltoraAuth && window.FeltoraAuth.currentUser()) window.FeltoraAuth.update({ felt });
   try { localStorage.setItem('feltora-felt', felt); } catch {}
 }
@@ -443,6 +451,8 @@ function showScreen(screenName) {
   }
   const fab = document.getElementById('game-phone-fab');
   if (fab) fab.style.display = screenName === 'game' ? 'flex' : 'none';
+  const nav = document.getElementById('lobby-bottom-nav');
+  if (nav) nav.hidden = screenName !== 'lobby' && screenName !== 'community';
 }
 
 function updatePlayerDisplay() {

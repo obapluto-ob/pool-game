@@ -2606,8 +2606,8 @@ applyTheme(initialTheme);
 async function bootAuth() {
   try {
     const result = await window.FeltoraAuth.initialize();
-    if (result && result.needsUsername) {
-      showGoogleUsernamePanel();
+    if (result && (result.needsUsername || result.needsPin)) {
+      showGoogleUsernamePanel(result);
       showScreen('auth');
       return;
     }
@@ -2757,13 +2757,24 @@ document.getElementById('tab-register').addEventListener('click', () => {
   document.getElementById('auth-provider').hidden = false;
 });
 
-function showGoogleUsernamePanel() {
+function showGoogleUsernamePanel(state) {
+  const needsPin = !!(state && state.needsPin);
+  const username = document.getElementById('google-username');
   document.getElementById('auth-tabs').hidden = true;
   document.getElementById('panel-login').hidden = true;
   document.getElementById('panel-register').hidden = true;
   document.getElementById('panel-google-username').hidden = false;
   document.getElementById('auth-provider').hidden = true;
-  document.getElementById('google-username').focus();
+  document.getElementById('google-setup-title').textContent = needsPin
+    ? 'Add a sign-in PIN'
+    : 'Choose your FELTORA username';
+  document.getElementById('google-setup-copy').textContent = needsPin
+    ? 'Your Google account is connected. Add a PIN so you can also sign in with your username on any device.'
+    : 'Choose a username and 4-digit PIN. Use either Google or your username and PIN to sign in on any device.';
+  document.getElementById('google-finish-label').textContent = needsPin ? 'Save PIN' : 'Create account';
+  username.readOnly = needsPin;
+  if (needsPin) username.value = state.username;
+  document.getElementById(needsPin ? 'google-pin' : 'google-username').focus();
 }
 
 function showAuthenticatedLobby(username) {
@@ -2780,8 +2791,8 @@ document.getElementById('btn-google-signin').addEventListener('click', async () 
   try {
     const result = await window.FeltoraAuth.googleSignIn();
     if (result.redirecting) return;
-    if (result.needsUsername) {
-      showGoogleUsernamePanel();
+    if (result.needsUsername || result.needsPin) {
+      showGoogleUsernamePanel(result);
       return;
     }
     if (!result.ok) {
@@ -2797,10 +2808,20 @@ document.getElementById('btn-google-signin').addEventListener('click', async () 
 document.getElementById('btn-google-finish').addEventListener('click', async () => {
   clearAuthError('google-error');
   const username = document.getElementById('google-username').value.trim().toLowerCase();
+  const pin = document.getElementById('google-pin').value;
+  const confirmPin = document.getElementById('google-pin-confirm').value;
+  if (!/^\d{4}$/.test(pin)) {
+    showAuthError('google-error', 'PIN must be exactly 4 digits.');
+    return;
+  }
+  if (pin !== confirmPin) {
+    showAuthError('google-error', 'PINs do not match.');
+    return;
+  }
   const button = document.getElementById('btn-google-finish');
   button.disabled = true;
   try {
-    const result = await window.FeltoraAuth.completeGoogleRegistration(username);
+    const result = await window.FeltoraAuth.completeGoogleRegistration(username, pin);
     if (!result.ok) {
       showAuthError('google-error', result.error || 'Could not finish account setup.');
       return;
@@ -2813,6 +2834,11 @@ document.getElementById('btn-google-finish').addEventListener('click', async () 
 
 document.getElementById('google-username').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') document.getElementById('btn-google-finish').click();
+});
+['google-pin', 'google-pin-confirm'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') document.getElementById('btn-google-finish').click();
+  });
 });
 
 document.getElementById('btn-google-cancel').addEventListener('click', async () => {

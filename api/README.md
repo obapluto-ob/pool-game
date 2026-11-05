@@ -15,7 +15,7 @@ Before deploying:
 
 For the tournament Join action, include the host's Firebase UID as `hostUid` in `/tournament/active`; the app resolves the host profile and sends a direct message.
 
-Google sign-in uses a popup on desktop and a redirect on narrow screens. Existing PIN users can sign in and choose **Link Google for easier sign-in** in their profile; this keeps the same Firebase UID and profile. A new Google user chooses a FELTORA username once. The browser's Firebase auth persistence restores that Google session on the same device, while the Firebase profile can be loaded on another device after Google sign-in.
+Google sign-in uses a popup on desktop and a redirect on narrow screens. New Google users choose a FELTORA username and a four-digit PIN; both credentials resolve to the same Firebase UID, so they can sign in on another device with Google or with username and PIN. Older Google profiles without a PIN are prompted to add one at their next Google sign-in. Existing PIN users can sign in and choose **Link Google for easier sign-in** in their profile; this keeps the same Firebase UID and profile. The browser's Firebase auth persistence restores the Google session on the same device. Four-digit PINs are weak; Google sign-in remains the recommended option.
 
 If Community requests return `401 Permission denied`, verify the deployed Realtime Database rules on the exact database URL configured by `FIREBASE_WEB_CONFIG`. The source rules allow public Community reads, but a Vercel deployment alone does not apply them.
 

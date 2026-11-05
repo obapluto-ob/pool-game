@@ -109,10 +109,14 @@ function validateUsername(value) {
 
 function validateCredentials(body) {
   const username = validateUsername(body.username);
-  const pin = typeof body.pin === 'string' ? body.pin : '';
-
-  if (!/^\d{4}$/.test(pin)) throw httpError(400, 'PIN must be exactly 4 digits.');
+  const pin = validatePin(body.pin);
   return { username, pin };
+}
+
+function validatePin(value) {
+  const pin = typeof value === 'string' ? value : '';
+  if (!/^\d{4}$/.test(pin)) throw httpError(400, 'PIN must be exactly 4 digits.');
+  return pin;
 }
 
 function uidForUsername(username) {
@@ -238,8 +242,52 @@ async function verifyGoogleIdToken(auth, idToken) {
   return decoded;
 }
 
+async function getGoogleAccountStatus(auth, database, idToken) {
+  const decoded = await verifyGoogleIdToken(auth, idToken);
+  const [profileSnapshot, credentialSnapshot] = await Promise.all([
+    database.ref('/profiles/' + decoded.uid).once('value'),
+    database.ref('/authCredentials/' + decoded.uid).once('value')
+  ]);
+  const profile = profileSnapshot.val();
+  if (!profile) return { needsUsername: true, needsPin: false };
+  if (typeof profile.username !== 'string') {
+    throw httpError(403, 'This Google account has an invalid FELTORA profile.');
+  }
+  const reservation = (await database.ref('/authUsernames/' + profile.username).once('value')).val();
+  if (reservation !== decoded.uid) throw httpError(403, 'This FELTORA account could not be verified.');
+  return {
+    username: profile.username,
+    needsUsername: false,
+    needsPin: !credentialSnapshot.exists()
+  };
+}
+
+async function storeGooglePin(database, uid, pin, req) {
+  const ipKey = rateLimitKey('google-pin:' + uid + ':' + getClientIp(req));
+  await assertNotRateLimited(database, ipKey);
+
+  const salt = crypto.randomBytes(16).toString('hex');
+  const pinHash = await hashPin(pin, Buffer.from(salt, 'hex'));
+  const credentialRef = database.ref('/authCredentials/' + uid);
+  const result = await credentialRef.transaction((current) => current === null ? { salt, pinHash } : undefined);
+
+  if (!result.committed) {
+    const existing = result.snapshot.val();
+    const candidate = Buffer.from(await hashPin(pin, Buffer.from(existing.salt, 'hex')), 'hex');
+    const stored = Buffer.from(existing.pinHash, 'hex');
+    if (candidate.length !== stored.length || !crypto.timingSafeEqual(candidate, stored)) {
+      await recordFailedAttempt(database, ipKey, 5);
+      throw httpError(409, 'A PIN is already set for this account. Use that PIN to sign in.');
+    }
+  }
+
+  await resetRateLimit(database, [ipKey]);
+  return { salt, pinHash, created: result.committed };
+}
+
 async function registerGoogleUser(auth, database, body, req) {
   const username = validateUsername(body.username);
+  const pin = validatePin(body.pin);
   const decoded = await verifyGoogleIdToken(auth, body.idToken);
   const uid = decoded.uid;
   const profileRef = database.ref('/profiles/' + uid);
@@ -251,6 +299,7 @@ async function registerGoogleUser(auth, database, body, req) {
     }
     const reservation = (await database.ref('/authUsernames/' + username).once('value')).val();
     if (reservation !== uid) throw httpError(403, 'This FELTORA account could not be verified.');
+    await storeGooglePin(database, uid, pin, req);
     return { uid, username, profile: existingProfile };
   }
 
@@ -267,11 +316,20 @@ async function registerGoogleUser(auth, database, body, req) {
     { displayName: decoded.name },
     body.profile && typeof body.profile === 'object' ? body.profile : {}
   ));
+  let credential;
   try {
+    credential = await storeGooglePin(database, uid, pin, req);
     await profileRef.set(profile);
   } catch (error) {
-    await database.ref('/authUsernames/' + username)
-      .transaction((current) => current === uid ? null : undefined);
+    await Promise.allSettled([
+      database.ref('/authUsernames/' + username)
+        .transaction((current) => current === uid ? null : undefined),
+      profileRef.remove(),
+      credential && credential.created
+        ? database.ref('/authCredentials/' + uid)
+          .transaction((current) => current && current.pinHash === credential.pinHash ? null : undefined)
+        : Promise.resolve()
+    ]);
     throw error;
   }
   return { uid, username, profile };
@@ -386,6 +444,10 @@ module.exports = async function handler(req, res) {
     body = parseBody(req.body);
     const { auth, database } = getServices();
 
+    if (body.action === 'google-status') {
+      const result = await getGoogleAccountStatus(auth, database, body.idToken);
+      return res.status(200).json(result);
+    }
     if (body.action === 'google-register') {
       const result = await registerGoogleUser(auth, database, body, req);
       return res.status(201).json(result);

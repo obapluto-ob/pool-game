@@ -155,6 +155,17 @@ const Auth = (() => {
     if (!user || !window.FeltoraFirebase) throw new Error('Firebase sign-in is unavailable.');
 
     clearCloudSession();
+    const status = await postAuthAction('google-status', {
+      idToken: await user.getIdToken()
+    });
+    if (status.needsUsername) {
+      pendingGoogleUser = user;
+      return { ok: false, needsUsername: true };
+    }
+    if (status.needsPin) {
+      pendingGoogleUser = user;
+      return { ok: false, needsPin: true, username: status.username };
+    }
     const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(user.uid));
     if (!profile) {
       pendingGoogleUser = user;
@@ -391,13 +402,14 @@ const Auth = (() => {
       }
     },
 
-    async completeGoogleRegistration(username) {
+    async completeGoogleRegistration(username, pin) {
       const user = pendingGoogleUser || (firebaseAuthInstance && firebaseAuthInstance.currentUser);
       if (!user) return { ok: false, error: 'Sign in with Google before creating your FELTORA profile.' };
       try {
         const existing = getAccount(username);
         const result = await postAuthAction('google-register', {
           username,
+          pin,
           idToken: await user.getIdToken(),
           profile: existing ? localProfile(existing) : { displayName: user.displayName }
         });

@@ -101,17 +101,27 @@
 
           <div class="auth-panel google-username-panel" id="panel-google-username" hidden>
             <div>
-              <h2 class="google-setup-title">Choose your FELTORA username</h2>
-              <p class="google-setup-copy">Your Google account secures sign-in. Your username is how other players find you.</p>
+              <h2 class="google-setup-title" id="google-setup-title">Choose your FELTORA username</h2>
+              <p class="google-setup-copy" id="google-setup-copy">Choose a username and 4-digit PIN. Use either Google or your username and PIN to sign in on any device.</p>
             </div>
             <div class="auth-field">
               <label class="mini-label" for="google-username">Username</label>
               <input id="google-username" type="text" autocomplete="username" placeholder="choose_a_name" maxlength="18">
               <small>3–18 chars, letters/numbers/underscore only</small>
             </div>
+            <div class="auth-field">
+              <label class="mini-label" for="google-pin">Create a 4-digit PIN</label>
+              <input id="google-pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="new-password">
+              <small>Use this with your username to sign in on any device.</small>
+            </div>
+            <div class="auth-field">
+              <label class="mini-label" for="google-pin-confirm">Confirm PIN</label>
+              <input id="google-pin-confirm" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="new-password">
+              <small class="google-pin-note">Four-digit PINs are less secure than Google sign-in; use it as a backup.</small>
+            </div>
             <p class="auth-error" id="google-error" hidden></p>
             <button class="mode-btn primary auth-submit" id="btn-google-finish" type="button">
-              <span>Finish setup</span><span class="meta">→</span>
+              <span id="google-finish-label">Create account</span><span class="meta">→</span>
             </button>
             <button class="auth-guest-btn" id="btn-google-cancel" type="button">Use another sign-in method</button>
           </div>
@@ -1174,7 +1184,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="src/auth.js?v=20261107-v10" defer></script>
+  <script src="src/auth.js?v=20261107-v11" defer></script>
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>

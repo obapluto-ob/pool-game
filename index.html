@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-  <link rel="stylesheet" href="css/styles.css?v=20261107-v11">
+  <link rel="stylesheet" href="css/styles.css?v=20261107-v12">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo.svg">
 </head>
@@ -1145,13 +1145,26 @@
           <div class="compose-type-row">
             <span class="mini-label">Post type</span>
             <div class="compose-types">
-              <button class="compose-type-btn active" data-type="chat" type="button">💬 Chat</button>
-              <button class="compose-type-btn" data-type="win" type="button">🏆 Win</button>
-              <button class="compose-type-btn" data-type="bug" type="button">🐛 Bug</button>
-              <button class="compose-type-btn" data-type="idea" type="button">💡 Idea</button>
+              <button class="compose-type-btn active" data-type="chat" type="button" aria-pressed="true">💬 Chat</button>
+              <button class="compose-type-btn" data-type="win" type="button" aria-pressed="false">🏆 Win</button>
+              <button class="compose-type-btn" data-type="bug" type="button" aria-pressed="false">🐛 Bug</button>
+              <button class="compose-type-btn" data-type="idea" type="button" aria-pressed="false">💡 Idea</button>
             </div>
           </div>
           <textarea class="compose-textarea" id="compose-text" maxlength="280" placeholder="What's on your mind? (280 chars max)"></textarea>
+          <div class="compose-image-upload">
+            <label class="compose-image-button">📷 Add a photo
+              <input class="compose-image-input" id="compose-image" type="file" accept="image/jpeg,image/png,image/webp">
+            </label>
+            <span class="compose-image-help">JPEG, PNG, or WebP. Images are resized to fit community limits.</span>
+          </div>
+          <div class="compose-image-preview" id="compose-image-preview" hidden>
+            <img id="compose-image-preview-img" alt="Photo attached to your community post">
+            <div class="compose-image-preview-footer">
+              <span id="compose-image-status" role="status" aria-live="polite"></span>
+              <button class="compose-image-remove" id="compose-image-remove" type="button">Remove photo</button>
+            </div>
+          </div>
           <div class="compose-footer">
             <span class="compose-char-count" id="compose-chars">280</span>
             <div class="compose-actions">
@@ -1267,8 +1280,8 @@
   <script src="src/icons.js?v=20261107-v5" defer></script>
   <script src="src/mascots.js?v=20261107-v5" defer></script>
   <script src="src/online.js?v=20261107-v5" defer></script>
-  <script src="src/game.js?v=20261107-v12" defer></script>
-  <script src="src/community.js?v=20261107-v10" defer></script>
+  <script src="src/game.js?v=20261107-v13" defer></script>
+  <script src="src/community.js?v=20261107-v11" defer></script>
   <script src="src/onboarding.js?v=20261107-v9" defer></script>
   <script src="src/firebase.js?v=20261107-v6" defer></script>
   <script src="src/store.js?v=20261107-v4" defer></script>

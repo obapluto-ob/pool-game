@@ -3012,7 +3012,7 @@ window.addEventListener('DOMContentLoaded', () => { void bootAuth(); }, { once: 
 requestAnimationFrame(frame);
 
 // ── Win card screenshot ─────────────────────────────────────────
-async function saveWinCard() {
+async function createWinCard() {
   const winnerName = playerNames[winner] || 'Player';
   const loserName  = playerNames[1 - winner] || 'Opponent';
   const W2 = 640, H2 = 360;
@@ -3082,6 +3082,16 @@ async function saveWinCard() {
 
   // export
   const blob = await new Promise((res) => oc.toBlob(res, 'image/png'));
+  if (!blob) throw new Error('The win card image could not be created.');
+  return blob;
+}
+
+window.FeltoraGame = Object.assign(window.FeltoraGame || {}, { createWinCard: createWinCard });
+
+async function saveWinCard() {
+  const winnerName = playerNames[winner] || 'Player';
+  const loserName = playerNames[1 - winner] || 'Opponent';
+  const blob = await createWinCard();
   const fileName = `feltora-win-${winnerName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
   const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
 

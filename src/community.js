@@ -1,8 +1,12 @@
 // ── Community / Clubhouse Feed ───────────────────────────────────
 const MAX_POSTS = 120;
+const MAX_COMMUNITY_IMAGE_LENGTH = 140000;
+const MAX_COMMUNITY_IMAGE_FILE_SIZE = 12 * 1024 * 1024;
 let communityFilter = 'all';
 let composeType = 'chat';
 let pendingWinImage = null;
+let composeImageRequest = 0;
+let composeImageBusy = false;
 let communityPosts = [];
 let communityLikes = {};
 let communityFollows = {};
@@ -181,7 +185,7 @@ function communityRenderFeed() {
       ? '<button class="feed-delete" data-id="' + escapeHtml(post.id) + '" title="Delete" aria-label="Delete post">&#x2715;</button>'
       : '';
     const image = typeof post.image === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(post.image)
-      ? '<img class="feed-win-img" src="' + escapeHtml(post.image) + '" alt="Win screenshot" loading="lazy">'
+      ? '<img class="feed-win-img" src="' + escapeHtml(post.image) + '" alt="Community post photo" loading="lazy">'
       : '';
     const heart = liked ? '&#x2764;&#xFE0F;' : '&#x1F90D;';
     const followBtn = me && post.authorUid !== uid
@@ -225,7 +229,9 @@ function communityRenderFeed() {
 async function communityPost(body, type, image) {
   const me = window.FeltoraAuth && window.FeltoraAuth.currentUser();
   const uid = window.FeltoraAuth && window.FeltoraAuth.uid();
-  if (!me || !uid || !body.trim()) return false;
+  if (!me || !uid) throw new Error('Sign in again before publishing your post.');
+  if (!window.FeltoraFirebase) throw new Error('Community service is unavailable. Try again later.');
+  if (!body.trim()) throw new Error('Write a message before publishing your post.');
   if (!['win', 'bug', 'idea', 'chat'].includes(type)) throw new Error('Choose a valid post type.');
 
   const post = {
@@ -237,12 +243,143 @@ async function communityPost(body, type, image) {
     type: type,
     ts: Date.now()
   };
-  if (typeof image === 'string' && image.length <= 150000
-      && /^data:image\/(png|jpeg|webp);base64,/.test(image)) post.image = image;
+  if (image) {
+    if (typeof image !== 'string' || image.length > MAX_COMMUNITY_IMAGE_LENGTH
+        || !/^data:image\/jpeg;base64,/.test(image)) {
+      throw new Error('This photo could not be prepared. Choose another image and try again.');
+    }
+    post.image = image;
+  }
 
-  await window.FeltoraFirebase.push('/community/posts', post);
-  await communityRefresh();
+  const result = await window.FeltoraFirebase.push('/community/posts', post);
+  const postId = typeof result === 'string' ? result : result && typeof result.name === 'string' ? result.name : 'local-' + post.ts;
+  communityPosts = [{ ...post, id: postId }]
+    .concat(communityPosts.filter(function(existing) { return existing.id !== postId; }))
+    .slice(0, MAX_POSTS);
+  communityRenderFeed();
+  try {
+    await communityRefresh();
+  } catch (error) {
+    console.warn('Post published, but the community feed could not refresh:', error);
+    communityShowStatus('Your post was published, but the feed could not refresh. Check your connection.');
+  }
   return true;
+}
+
+function communityCanvasBlob(canvas, quality) {
+  return new Promise(function(resolve, reject) {
+    canvas.toBlob(function(blob) {
+      if (blob) resolve(blob);
+      else reject(new Error('The selected image could not be processed.'));
+    }, 'image/jpeg', quality);
+  });
+}
+
+function communityReadDataUrl(blob) {
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function() {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('The selected image could not be read.'));
+    };
+    reader.onerror = function() { reject(new Error('The selected image could not be read.')); };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function communityPrepareImage(file) {
+  if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    throw new Error('Choose a JPEG, PNG, or WebP image.');
+  }
+  if (file.size > MAX_COMMUNITY_IMAGE_FILE_SIZE) {
+    throw new Error('Choose an image smaller than 12 MB.');
+  }
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = sourceUrl;
+    await image.decode();
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error('The selected image is empty.');
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser cannot prepare images for community posts.');
+    let scale = Math.min(1, 1200 / image.naturalWidth, 1200 / image.naturalHeight);
+    while (scale >= 0.25) {
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.82, 0.68, 0.54, 0.4]) {
+        const blob = await communityCanvasBlob(canvas, quality);
+        if (blob.size > 105000) continue;
+        const dataUrl = await communityReadDataUrl(blob);
+        if (dataUrl.length <= MAX_COMMUNITY_IMAGE_LENGTH) return dataUrl;
+      }
+      scale *= 0.75;
+    }
+    throw new Error('This image is too detailed to fit. Try a smaller photo.');
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function communityShowImagePreview(dataUrl, status) {
+  const preview = document.getElementById('compose-image-preview');
+  const image = document.getElementById('compose-image-preview-img');
+  const statusEl = document.getElementById('compose-image-status');
+  if (image) image.src = dataUrl || '';
+  if (statusEl) statusEl.textContent = status || '';
+  if (preview) preview.hidden = !dataUrl;
+}
+
+function communityClearImage() {
+  composeImageRequest++;
+  composeImageBusy = false;
+  pendingWinImage = null;
+  const input = document.getElementById('compose-image');
+  if (input) input.value = '';
+  communityShowImagePreview(null, '');
+  const submitBtn = document.getElementById('compose-submit');
+  if (submitBtn) submitBtn.disabled = false;
+}
+
+function communitySetComposeType(type) {
+  composeType = type;
+  document.querySelectorAll('.compose-type-btn').forEach(function(btn) {
+    const active = btn.dataset.type === type;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function communityStartComposer(type, text) {
+  communitySetComposeType(type || 'chat');
+  communityClearImage();
+  const textarea = document.getElementById('compose-text');
+  textarea.value = text || '';
+  document.getElementById('compose-chars').textContent = String(280 - textarea.value.length);
+  composePanel.hidden = false;
+  composePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  textarea.focus({ preventScroll: true });
+}
+
+function communityPostErrorMessage(error) {
+  const message = String(error && error.message || error || '');
+  if (/PERMISSION_DENIED|permission denied/i.test(message)) {
+    return 'Firebase blocked this post. Confirm the deployed Community rules and that your signed-in profile username matches.';
+  }
+  if (/Firebase request failed \(401\)/i.test(message)) {
+    return 'Your sign-in may have expired. Sign in again, then retry your post.';
+  }
+  if (/Firebase request failed \(403\)/i.test(message)) {
+    return 'Firebase denied this action. Check the deployed Community rules and your account permissions.';
+  }
+  if (/failed to fetch|network|offline/i.test(message)) {
+    return 'Your post could not reach the server. Check your connection and try again.';
+  }
+  return message || 'Your post could not be published. Try again.';
 }
 
 async function communityRecordWin() {
@@ -359,17 +496,16 @@ document.querySelectorAll('.community-tab').forEach(function(btn) {
 const composePanel = document.getElementById('community-compose');
 document.getElementById('community-new-post').addEventListener('click', function() {
   if (!communityRequireAccount('post')) return;
-  pendingWinImage = null;
-  composePanel.hidden = false;
-  document.getElementById('compose-text').focus();
-  composePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  communityStartComposer('chat', '');
+  communityShowStatus('');
 });
 
 document.getElementById('compose-cancel').addEventListener('click', function() {
   composePanel.hidden = true;
   document.getElementById('compose-text').value = '';
   document.getElementById('compose-chars').textContent = '280';
-  pendingWinImage = null;
+  communityClearImage();
+  communitySetComposeType('chat');
 });
 
 document.getElementById('compose-text').addEventListener('input', function(event) {
@@ -378,30 +514,60 @@ document.getElementById('compose-text').addEventListener('input', function(event
 
 document.querySelectorAll('.compose-type-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
-    document.querySelectorAll('.compose-type-btn').forEach(function(typeBtn) { typeBtn.classList.remove('active'); });
-    btn.classList.add('active');
-    composeType = btn.dataset.type;
+    communitySetComposeType(btn.dataset.type);
   });
 });
+
+document.getElementById('compose-image').addEventListener('change', async function(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const request = ++composeImageRequest;
+  composeImageBusy = true;
+  document.getElementById('compose-submit').disabled = true;
+  communityShowImagePreview(null, '');
+  communityShowStatus('');
+  try {
+    const image = await communityPrepareImage(file);
+    if (request !== composeImageRequest) return;
+    pendingWinImage = image;
+    communityShowImagePreview(image, 'Photo ready to post.');
+  } catch (error) {
+    if (request !== composeImageRequest) return;
+    communityClearImage();
+    communityShowStatus(error.message || 'The selected image could not be prepared.');
+  } finally {
+    if (request === composeImageRequest) {
+      composeImageBusy = false;
+      document.getElementById('compose-submit').disabled = false;
+    }
+  }
+});
+
+document.getElementById('compose-image-remove').addEventListener('click', communityClearImage);
 
 document.getElementById('compose-submit').addEventListener('click', async function() {
   const body = document.getElementById('compose-text').value;
   if (!body.trim()) { document.getElementById('compose-text').focus(); return; }
   const submitBtn = document.getElementById('compose-submit');
+  if (composeImageBusy) return;
+  const originalLabel = submitBtn.textContent;
   submitBtn.disabled = true;
+  submitBtn.textContent = 'Posting…';
   try {
-    await communityPost(body, composeType, pendingWinImage);
+    const published = await communityPost(body, composeType, pendingWinImage);
+    if (!published) throw new Error('Your post could not be published. Try again.');
     composePanel.hidden = true;
     document.getElementById('compose-text').value = '';
     document.getElementById('compose-chars').textContent = '280';
-    pendingWinImage = null;
-    communityShowStatus('');
+    communityClearImage();
+    communitySetComposeType('chat');
     if (typeof announceGameAction === 'function') announceGameAction('Posted to the Clubhouse!', 2500);
   } catch (error) {
     console.error('Community post failed:', error);
-    communityShowStatus('Your post could not be published. Check your connection and try again.');
+    communityShowStatus(communityPostErrorMessage(error));
   } finally {
     submitBtn.disabled = false;
+    submitBtn.textContent = originalLabel;
   }
 });
 
@@ -411,23 +577,36 @@ document.getElementById('community-back').addEventListener('click', function() {
 
 const communityResultBtn = document.getElementById('btn-post-community');
 if (communityResultBtn) {
-  communityResultBtn.addEventListener('click', function() {
+  communityResultBtn.addEventListener('click', async function() {
     if (typeof showScreen === 'function') showScreen('community');
     communityRenderFeed();
     const won = typeof winner !== 'undefined' && winner !== null && winner !== -1
-      && (typeof onlineRole !== 'undefined' && onlineRole === 'guest' ? winner === 1 : winner === 0);
+      && typeof onlineLocalPlayer !== 'undefined' && winner === onlineLocalPlayer;
     if (!won) return;
-    composeType = 'win';
-    document.querySelectorAll('.compose-type-btn').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.type === 'win');
-    });
     if (!communityRequireAccount('share a win')) {
       communityShowStatus('Sign in or create an account to share your win.');
       return;
     }
-    composePanel.hidden = false;
-    document.getElementById('compose-text').value = 'Just won a match on FELTORA!';
-    document.getElementById('compose-chars').textContent = String(280 - 30);
+    communityStartComposer('win', 'Just won a match on FELTORA!');
+    const submitBtn = document.getElementById('compose-submit');
+    composeImageBusy = true;
+    submitBtn.disabled = true;
+    communityShowImagePreview(null, '');
+    try {
+      if (!window.FeltoraGame || !window.FeltoraGame.createWinCard) {
+        throw new Error('The win card is unavailable. You can still publish your win without a photo.');
+      }
+      const card = await window.FeltoraGame.createWinCard();
+      pendingWinImage = await communityPrepareImage(card);
+      communityShowImagePreview(pendingWinImage, 'Win card attached.');
+      communityShowStatus('');
+    } catch (error) {
+      console.warn('Win card could not be attached:', error);
+      communityShowStatus(error.message || 'The win card could not be attached. You can still publish your win without a photo.');
+    } finally {
+      composeImageBusy = false;
+      submitBtn.disabled = false;
+    }
   });
 }
 

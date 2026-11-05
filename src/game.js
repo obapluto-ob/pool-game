@@ -2614,6 +2614,7 @@ applyTheme(initialTheme);
 
 // ── Auth boot ────────────────────────────────────────────────────
 async function bootAuth() {
+  let googleRestoreError = '';
   try {
     const result = await window.FeltoraAuth.initialize();
     if (result && result.needsUsername) {
@@ -2628,12 +2629,19 @@ async function bootAuth() {
     }
   } catch (error) {
     console.error('Google sign-in restore failed:', error);
-    showAuthError('login-error', error.message || 'Your saved Google sign-in could not be restored.');
+    googleRestoreError = error.message || 'Your saved Google sign-in could not be restored.';
   }
 
   const user = window.FeltoraAuth.currentUser();
   if (user) {
     applyAccountToLobby(user);
+    if (googleRestoreError) {
+      const linkStatus = document.getElementById('google-link-status');
+      if (linkStatus) {
+        linkStatus.textContent = googleRestoreError;
+        linkStatus.hidden = false;
+      }
+    }
     showScreen('lobby');
     try {
       const account = await window.FeltoraAuth.refreshProfile();
@@ -2643,6 +2651,7 @@ async function bootAuth() {
     }
     return;
   }
+  if (googleRestoreError) showAuthError('login-error', googleRestoreError);
   // check if a returning user exists — pre-fill and hide the create account tab
   try {
     const last = localStorage.getItem('feltora-last-user');

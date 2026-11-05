@@ -7,6 +7,7 @@ const Auth = (() => {
   const SESSION_KEY = 'feltora-session';
   const CLOUD_SESSION_KEY = 'feltora-cloud-session';
   const GOOGLE_SESSION_KEY = 'feltora-google-session';
+  const GOOGLE_REDIRECT_INTENT_KEY = 'feltora-google-redirect-intent';
   const RANKS = [
     { name: 'Hustler', min: 0, max: 499 },
     { name: 'Shark', min: 500, max: 1499 },
@@ -88,6 +89,31 @@ const Auth = (() => {
     }
   }
 
+  function saveGoogleRedirectIntent(intent) {
+    try {
+      localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify(intent));
+    } catch {
+      throw new Error('Google sign-in could not be prepared. Check browser storage settings and try again.');
+    }
+  }
+
+  function googleRedirectIntent() {
+    try {
+      const intent = JSON.parse(localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY) || 'null');
+      return intent && (intent.type === 'sign-in' || intent.type === 'link') ? intent : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearGoogleRedirectIntent() {
+    try {
+      localStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
+    } catch {
+      console.error('Could not clear the Google redirect state.');
+    }
+  }
+
   function setCloudSession(data, username) {
     try {
       localStorage.setItem(CLOUD_SESSION_KEY, JSON.stringify(Object.assign({}, data, { username })));
@@ -154,21 +180,23 @@ const Auth = (() => {
   async function resolveGoogleUser(user) {
     if (!user || !window.FeltoraFirebase) throw new Error('Firebase sign-in is unavailable.');
 
-    clearCloudSession();
     const status = await postAuthAction('google-status', {
       idToken: await user.getIdToken()
     });
     if (status.needsUsername) {
+      clearCloudSession();
       pendingGoogleUser = user;
       return { ok: false, needsUsername: true };
     }
     const profile = await window.FeltoraFirebase.get('/profiles/' + encodeURIComponent(user.uid));
     if (!profile) {
+      clearCloudSession();
       pendingGoogleUser = user;
       return { ok: false, needsUsername: true };
     }
     if (typeof profile.username !== 'string') throw new Error('This account has an invalid FELTORA profile.');
 
+    clearCloudSession();
     saveGoogleSession(user, profile.username);
     storeAccount(profile.username, profile, getAccount(profile.username));
     syncAccountProfile(profile.username);
@@ -353,10 +381,27 @@ const Auth = (() => {
 
     async initialize() {
       const savedGoogleSession = googleSession();
+      const redirectIntent = googleRedirectIntent();
       try {
         const auth = await getFirebaseAuth();
         const redirectResult = await auth.getRedirectResult();
         const user = (redirectResult && redirectResult.user) || auth.currentUser;
+        if (redirectIntent && redirectIntent.type === 'link') {
+          clearGoogleRedirectIntent();
+          if (!user || user.uid !== redirectIntent.uid) {
+            throw new Error('Google was not linked to the signed-in FELTORA account. Please try again.');
+          }
+          const googleLinked = user.providerData.some((provider) => provider.providerId === 'google.com');
+          if (!googleLinked) {
+            throw new Error('Google was not linked. Please try again from your profile.');
+          }
+          clearCloudSession();
+          saveGoogleSession(user, redirectIntent.username);
+          storeAccount(redirectIntent.username, getAccount(redirectIntent.username), getAccount(redirectIntent.username));
+          pendingGoogleUser = null;
+          return { ok: true, linked: true, username: redirectIntent.username };
+        }
+        if (redirectIntent) clearGoogleRedirectIntent();
         if (user) {
           const result = await resolveGoogleUser(user);
           return result.ok ? Object.assign({}, result, { returningUser: true }) : result;
@@ -364,7 +409,9 @@ const Auth = (() => {
         if (savedGoogleSession) clearGoogleSession();
         return null;
       } catch (error) {
+        if (redirectIntent) clearGoogleRedirectIntent();
         if (savedGoogleSession) throw error;
+        if (redirectIntent) throw error;
         return null;
       }
     },
@@ -375,6 +422,7 @@ const Auth = (() => {
         const provider = new window.firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         if (window.matchMedia('(max-width: 760px)').matches) {
+          saveGoogleRedirectIntent({ type: 'sign-in', startedAt: Date.now() });
           await auth.signInWithRedirect(provider);
           return { ok: true, redirecting: true };
         }
@@ -383,11 +431,13 @@ const Auth = (() => {
           result = await auth.signInWithPopup(provider);
         } catch (error) {
           if (!error || error.code !== 'auth/popup-blocked') throw error;
+          saveGoogleRedirectIntent({ type: 'sign-in', startedAt: Date.now() });
           await auth.signInWithRedirect(provider);
           return { ok: true, redirecting: true };
         }
         return await resolveGoogleUser(result.user);
       } catch (error) {
+        clearGoogleRedirectIntent();
         const messages = {
           'auth/operation-not-allowed': 'Google sign-in is disabled for this Firebase project. Enable the Google provider in Firebase Authentication.',
           'auth/unauthorized-domain': 'This site is not authorized for Google sign-in. Add its hostname to Firebase Authentication authorized domains.',
@@ -438,20 +488,33 @@ const Auth = (() => {
           idToken: await this.getIdToken()
         });
         const auth = await getFirebaseAuth();
-        if (!auth.currentUser || auth.currentUser.uid !== uid) {
-          await auth.signInWithCustomToken(tokenResult.customToken);
+        let linkUser = auth.currentUser;
+        if (!linkUser || linkUser.uid !== uid) {
+          const signInResult = await auth.signInWithCustomToken(tokenResult.customToken);
+          linkUser = signInResult && signInResult.user || auth.currentUser;
+        }
+        if (!linkUser || linkUser.uid !== uid) {
+          throw new Error('Your FELTORA session could not be restored for Google linking. Sign in again and retry.');
         }
         const provider = new window.firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         if (window.matchMedia('(max-width: 760px)').matches) {
-          await auth.currentUser.linkWithRedirect(provider);
+          saveGoogleRedirectIntent({ type: 'link', uid, username, startedAt: Date.now() });
+          try {
+            await linkUser.linkWithRedirect(provider);
+          } catch (error) {
+            clearGoogleRedirectIntent();
+            throw error;
+          }
           return { ok: true, redirecting: true };
         }
-        const result = await auth.currentUser.linkWithPopup(provider);
+        const result = await linkUser.linkWithPopup(provider);
         if (result.user.uid !== uid) throw new Error('The Google account could not be linked to this profile.');
+        clearCloudSession();
         saveGoogleSession(result.user, username);
         return { ok: true };
       } catch (error) {
+        clearGoogleRedirectIntent();
         return { ok: false, error: error.message || 'Google could not be linked to this account.' };
       }
     },

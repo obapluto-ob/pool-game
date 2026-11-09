@@ -4,6 +4,7 @@
       "source": "/.well-known/apple-developer-merchantid-domain-association",
       "headers": [
         { "key": "Content-Type", "value": "application/text" },
+        { "key": "Content-Disposition", "value": "inline" },
         { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     }

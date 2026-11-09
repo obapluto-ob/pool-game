@@ -1189,66 +1189,23 @@
 
   function triggerPaystack(amount, email) {
     var cfg = getGeoConfig(userCountry);
-    var thanks = getThankyouMessage(amount, cfg.currency, cfg.symbol);
-    var ref = 'FELTORA-TIP-' + Date.now();
-    var paystackPop = new PaystackPop();
-    paystackPop.checkout({
-      key: PAYSTACK_KEY,
+    var uid = window.FeltoraAuth && window.FeltoraAuth.uid() || '';
+    var username = window.FeltoraAuth && window.FeltoraAuth.currentUser() || '';
+    showToast('Opening secure checkout...');
+    window.FeltoraStore.walletAction('initialize-top-up', {
+      amountKes: amount,
       email: email,
-      amount: amount * 100,
-      currency: cfg.currency,
-      channels: cfg.channels,
-      ref: ref,
+      callbackUrl: window.location.origin + window.location.pathname + '?tip=return',
       metadata: {
         paymentKind: 'tip',
-        uid: window.FeltoraAuth && window.FeltoraAuth.uid() || '',
-        username: window.FeltoraAuth && window.FeltoraAuth.currentUser() || '',
-        custom_fields: [
-          { display_name: 'Game', variable_name: 'game', value: 'FELTORA 8-ball pool' },
-          { display_name: 'Country', variable_name: 'country', value: userCountry },
-          { display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }
-        ]
-      },
-      onSuccess: function(response) {
-        if (!response || !response.reference) {
-          showToast('Paystack returned no payment reference. Please check your payment status before trying again.');
-          return;
-        }
-        verifyTipPayment(response.reference).then(function() {
-          var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
-          if (uid) refreshVerifiedSupporter(uid, 0);
-          var tipView = document.getElementById('phone-tip-view-inner');
-          if (tipView) {
-            tipView.innerHTML = '<div class="tip-thankyou-screen">'
-              + '<div class="tip-ty-emoji">' + thanks.emoji + '</div>'
-              + '<h3 class="tip-ty-title">Thank you!</h3>'
-              + '<p class="tip-ty-msg">' + thanks.msg + '</p>'
-              + '<div class="tip-ty-amount">' + cfg.symbol + ' ' + Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ' + cfg.currency + '</div>'
-              + '<div class="tip-ty-ref"></div>'
-              + '<button class="tip-ty-back ob-btn-primary" type="button">Back to FELTORA</button>'
-              + '</div>';
-            var refEl = tipView.querySelector('.tip-ty-ref');
-            if (refEl) refEl.textContent = 'Verified ref: ' + response.reference;
-            var backBtn = tipView.querySelector('.tip-ty-back');
-            if (backBtn) backBtn.addEventListener('click', function() {
-              if (tipViewTemplate !== null) tipView.innerHTML = tipViewTemplate;
-              selectedTipAmt = 0;
-              tipInitDone = false;
-              initTipView();
-              phoneShowView('home');
-            });
-          }
-          showToast(thanks.emoji + ' Tip verified. Thank you for supporting FELTORA!');
-        }).catch(function(error) {
-          console.error('Paystack tip verification failed:', error);
-          showToast('Payment is not verified yet. Keep reference ' + response.reference + ' and check again shortly.');
-        });
-      },
-      onCancel: function() {
-        if (selectedTipAmt > 0) {
-          showToast('No pressure! Come back anytime. Every tip helps. 🙏');
-        }
+        uid: uid,
+        username: username
       }
+    }).then(function(result) {
+      if (!result.authorizationUrl) throw new Error('Paystack did not return a checkout link.');
+      window.location.assign(result.authorizationUrl);
+    }).catch(function(error) {
+      showToast(error.message || 'Could not open checkout. Try again.');
     });
   }
 
@@ -2057,6 +2014,23 @@
 
   function verifyWalletReturn() {
     var params = new URLSearchParams(window.location.search);
+    var reference = params.get('reference') || params.get('trxref');
+
+    // tip return
+    if (params.get('tip') === 'return' && reference && window.FeltoraStore) {
+      openGamePhone('tip');
+      showToast('Verifying your tip payment...');
+      verifyTipPayment(reference).then(function() {
+        var uid = window.FeltoraAuth && window.FeltoraAuth.uid();
+        if (uid) refreshVerifiedSupporter(uid, 0);
+        showToast('🎉 Tip verified. Thank you for supporting FELTORA!');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }).catch(function(error) {
+        showToast('Payment not verified yet. Keep ref: ' + reference);
+      });
+      return;
+    }
+
     if (params.get('wallet') !== 'return') return;
     var reference = params.get('reference') || params.get('trxref');
     if (!reference || walletReturnPromise || !window.FeltoraStore) return;

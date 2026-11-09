@@ -1189,18 +1189,12 @@
 
   function triggerPaystack(amount, email) {
     var cfg = getGeoConfig(userCountry);
-    var uid = window.FeltoraAuth && window.FeltoraAuth.uid() || '';
-    var username = window.FeltoraAuth && window.FeltoraAuth.currentUser() || '';
     showToast('Opening secure checkout...');
-    window.FeltoraStore.walletAction('initialize-top-up', {
-      amountKes: amount,
+    window.FeltoraStore.walletAction('initialize-tip', {
+      amount: amount,
+      currency: cfg.currency,
       email: email,
-      callbackUrl: window.location.origin + window.location.pathname + '?tip=return',
-      metadata: {
-        paymentKind: 'tip',
-        uid: uid,
-        username: username
-      }
+      callbackUrl: window.location.origin + window.location.pathname
     }).then(function(result) {
       if (!result.authorizationUrl) throw new Error('Paystack did not return a checkout link.');
       window.location.assign(result.authorizationUrl);

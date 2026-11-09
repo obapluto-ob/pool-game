@@ -177,7 +177,7 @@ function validEmail(value) {
     && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function callbackUrl(value, req) {
+function callbackUrl(value, req, params) {
   if (typeof value !== 'string') throw httpError(400, 'The checkout return address is invalid.');
   let url;
   try { url = new URL(value); } catch { throw httpError(400, 'The checkout return address is invalid.'); }
@@ -186,10 +186,45 @@ function callbackUrl(value, req) {
       || (url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname))) {
     throw httpError(400, 'The checkout return address must be this FELTORA site.');
   }
-  url.search = 'wallet=return';
+  url.search = new URLSearchParams(params || { wallet: 'return' }).toString();
   url.hash = '';
   return url.toString();
 }
+
+async function initializeTip(req, database, identity, body) {
+  const cfg = TIP_CURRENCIES[body.currency] || TIP_CURRENCIES['KES'];
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount < cfg.min) {
+    throw httpError(400, 'Invalid tip amount.');
+  }
+  if (!validEmail(body.email)) throw httpError(400, 'Enter a valid email address for your payment receipt.');
+  const url = callbackUrl(body.callbackUrl, req, { tip: 'return' });
+  const reference = 'feltora_tip_' + crypto.randomUUID();
+  const checkout = await paystackRequest('/transaction/initialize', {
+    email: body.email.trim(),
+    amount: Math.round(amount * 100),
+    currency: cfg.currency,
+    reference,
+    callback_url: url,
+    metadata: {
+      paymentKind: 'tip',
+      uid: identity.uid,
+      username: identity.username
+    }
+  });
+  if (!checkout.authorization_url) throw httpError(502, 'Paystack did not return a checkout link.');
+  return { authorizationUrl: checkout.authorization_url, reference };
+}
+
+const TIP_CURRENCIES = {
+  KES: { currency: 'KES', min: 10 },
+  NGN: { currency: 'NGN', min: 100 },
+  GHS: { currency: 'GHS', min: 1 },
+  ZAR: { currency: 'ZAR', min: 5 },
+  USD: { currency: 'USD', min: 1 },
+  GBP: { currency: 'GBP', min: 1 },
+  EUR: { currency: 'EUR', min: 1 }
+};
 
 async function initializeTopUp(req, database, identity, body) {
   const amountKes = Number(body.amountKes);
@@ -508,6 +543,9 @@ module.exports = async function handler(req, res) {
         throw httpError(400, 'You are already in your contacts.');
       }
       return res.status(200).json({ username: player.username, uid: player.uid });
+    }
+    if (body.action === 'initialize-tip') {
+      return res.status(200).json(await initializeTip(req, database, identity, body));
     }
     if (body.action === 'initialize-top-up') {
       return res.status(200).json(await initializeTopUp(req, database, identity, body));

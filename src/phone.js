@@ -1129,7 +1129,7 @@
       if (typeof PaystackPop === 'undefined') {
         showToast('Loading payment...');
         var s = document.createElement('script');
-        s.src = 'https://js.paystack.co/v1/inline.js';
+        s.src = 'https://js.paystack.co/v2/inline.js';
         s.onload = function() { triggerPaystack(amount, email); };
         document.head.appendChild(s);
         return;
@@ -1191,8 +1191,8 @@
     var cfg = getGeoConfig(userCountry);
     var thanks = getThankyouMessage(amount, cfg.currency, cfg.symbol);
     var ref = 'FELTORA-TIP-' + Date.now();
-
-    var handler = PaystackPop.setup({
+    var paystackPop = new PaystackPop();
+    paystackPop.checkout({
       key: PAYSTACK_KEY,
       email: email,
       amount: amount * 100,
@@ -1209,7 +1209,7 @@
           { display_name: 'Message', variable_name: 'message', value: 'Tip for FELTORA developer' }
         ]
       },
-      callback: function(response) {
+      onSuccess: function(response) {
         if (!response || !response.reference) {
           showToast('Paystack returned no payment reference. Please check your payment status before trying again.');
           return;
@@ -1244,14 +1244,12 @@
           showToast('Payment is not verified yet. Keep reference ' + response.reference + ' and check again shortly.');
         });
       },
-      onClose: function() {
-        // user closed without paying — show gentle nudge
+      onCancel: function() {
         if (selectedTipAmt > 0) {
           showToast('No pressure! Come back anytime. Every tip helps. 🙏');
         }
       }
     });
-    handler.openIframe();
   }
 
   // ── Profile & Feed ───────────────────────────────────────────────

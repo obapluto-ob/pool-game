@@ -1,4 +1,10 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/(.*)",
+      "headers": [{ "key": "Content-Type", "value": "text/plain" }]
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/$1" }
   ]

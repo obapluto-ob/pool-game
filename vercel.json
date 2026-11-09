@@ -1,8 +1,11 @@
 {
   "headers": [
     {
-      "source": "/.well-known/(.*)",
-      "headers": [{ "key": "Content-Type", "value": "text/plain" }]
+      "source": "/.well-known/apple-developer-merchantid-domain-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/text" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
     }
   ],
   "rewrites": [
